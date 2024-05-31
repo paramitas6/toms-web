@@ -95,7 +95,7 @@ export function ProductDialogContent({
           </div>
           <div className="m-4 flex-shrink py-2">
             <h1 className="font text-xl">How to care</h1>
-            {product.description}
+            {product.careguide}
           </div>
 
                     {/*Size dialog div */}
