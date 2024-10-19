@@ -19,8 +19,8 @@ export function ProductCard({ id, name, priceInCents, description, imagePath }: 
         </div>
         <CardHeader>
             <div className="flex flex-col justify-between items-left mt-4 p-1 font-montserrat">
-            <CardTitle className="text-left text-large font-light pb-2">{name}</CardTitle>
-            <CardDescription className="text-left">{formatCurrency(priceInCents / 100)}</CardDescription>
+            <CardTitle className="text-center text-large font-light pb-2">{name}</CardTitle>
+            <CardDescription className="text-center">{formatCurrency(priceInCents / 100)}</CardDescription>
             </div>
 
         </CardHeader>

@@ -45,12 +45,12 @@ async function ProductsTable() {
     select: {
       id: true,
       name: true,
-      category:true,
+      category: true,
       priceInCents: true,
       isAvailableForPurchase: true,
       _count: {
         select: {
-          orders: true,
+          orderItems: true, // Count of OrderItems linked to Product
         },
       },
     },
@@ -58,6 +58,7 @@ async function ProductsTable() {
       name: "asc",
     },
   });
+
   if (products.length === 0) {
     return <p>No products found</p>;
   }
@@ -71,7 +72,7 @@ async function ProductsTable() {
           </TableHead>
           <TableHead>Name</TableHead>
           <TableHead>Price</TableHead>
-          <TableHead>category</TableHead>
+          <TableHead>Category</TableHead>
           <TableHead>Orders</TableHead>
           <TableHead className="w-0">
             <span className="sr-only">Actions</span>
@@ -97,7 +98,7 @@ async function ProductsTable() {
             <TableCell>{product.name}</TableCell>
             <TableCell>{formatCurrency(product.priceInCents / 100)}</TableCell>
             <TableCell>{product.category}</TableCell>
-            <TableCell>{formatNumber(product._count.orders)}</TableCell>
+            <TableCell>{formatNumber(product._count.orderItems)}</TableCell> {/* Updated here */}
             <TableCell>
               <DropdownMenu>
                 <DropdownMenuTrigger>
@@ -123,7 +124,7 @@ async function ProductsTable() {
                   <DropdownMenuSeparator />
                   <DeleteDropdownItem
                     id={product.id}
-                    disabled={product._count.orders > 0}
+                    disabled={product._count.orderItems > 0} // Updated here
                   />
                 </DropdownMenuContent>
               </DropdownMenu>

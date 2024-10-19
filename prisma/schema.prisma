@@ -1,30 +1,26 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+datasource db {
+  provider = "sqlite" // Specify SQLite as the provider
+  url      = env("DATABASE_URL") // Use the DATABASE_URL from your .env file
+}
 
 generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-
 model Product {
-  id           String @id @default(uuid())
+  id           String  @id @default(uuid())
   name         String
   description  String
   careguide    String
   category     String
   priceInCents Int
-  filePath     String
   imagePath    String
-  isAvailableForPurchase Boolean                @default(true)
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
-  orders                 Order[]
-  downloadVerifications  DownloadVerification[]
-  images                 Image[]
+  isAvailableForPurchase Boolean @default(true)
+  stock        Int     @default(0) // Default stock set to 0
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  images       Image[]
+  orderItems   OrderItem[]
 }
 
 model Image {
@@ -39,27 +35,58 @@ model Image {
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
+  name      String
+  password  String
+  role      String   @default("user")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   orders    Order[]
 }
 
 model Order {
-  id               String @id @default(uuid())
+  id               String    @id @default(uuid())
   pricePaidInCents Int
-
-  userId    String
-  productId String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isDelivery       Boolean?  @default(false)
+  recipientName    String?
+  deliveryAddress  String?
+  deliveryInstructions String?
+  postalCode       String?
+  deliveryDate     DateTime? // Store selected delivery date
+  deliveryTime     String?   // Store selected time window
+  status           String    @default("CART") // Status indicating an active cart
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  orderItems       OrderItem[]
 }
 
-model DownloadVerification {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  expiredAt DateTime
-  productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+model OrderItem {
+  id                 String   @id @default(uuid())
+  orderId            String
+  productId          String
+  quantity           Int
+  subtotalInCents    Int
+  cardMessage        String?  // Store personalized card message
+  deliveryInstructions String?
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product            Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model DeliveryFeeConfig {
+  id                String   @id @default(uuid())
+  basePostalCode    String
+  type              String   // "distance-based" or "flat"
+  distanceFeePerKm  Int?     // Fee per kilometer, optional
+  customRules       CustomDeliveryRule[]
+}
+
+model CustomDeliveryRule {
+  id                  String            @id @default(uuid())
+  postalCodePrefix    String
+  feeInCents          Int
+  deliveryFeeConfig   DeliveryFeeConfig @relation(fields: [deliveryFeeConfigId], references: [id])
+  deliveryFeeConfigId String
 }

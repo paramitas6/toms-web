@@ -1,4 +1,3 @@
-
 import CustomerNav from "@/components/CustomerNav";
 
 export default function CustomerLayout({
@@ -6,12 +5,11 @@ export default function CustomerLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-
   return (
-    <>
+    <div className="">
       <CustomerNav />
 
       <div className="container">{children}</div>
-    </>
+    </div>
   );
 }

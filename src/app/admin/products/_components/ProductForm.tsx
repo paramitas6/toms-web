@@ -11,72 +11,115 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/formatters";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { addProduct, updateProduct } from "../../_actions/products";
 import { useFormState, useFormStatus } from "react-dom";
 import { Textarea } from "@/components/ui/textarea";
-import { Product } from "@prisma/client";
+import { Product, Image as PrismaImage } from "@prisma/client";
 import Image from "next/image";
 
-interface Image {
-  id: number;
+interface ProductWithImages extends Product {
+  images?: PrismaImage[];
 }
 
-export function ProductForm({ product }: { product?: Product | null }) {
+export function ProductForm({ product }: { product?: ProductWithImages | null }) {
   const [error, action] = useFormState(
     product == null ? addProduct : updateProduct.bind(null, product.id),
     {}
   );
 
-  const [priceInCents, setPriceInCents] = useState<number | undefined>(
-    product?.priceInCents||0
+  const [priceInCents, setPriceInCents] = useState<number>(
+    product?.priceInCents || 0
   );
 
+  // State for additional images
+  const [additionalImages, setAdditionalImages] = useState<
+    {
+      id?: string;
+      file?: File | null;
+      previewUrl?: string;
+      existing?: boolean;
+    }[]
+  >([]);
 
-  const [images, setImages] = useState<(File | null)[]>([]);
+  const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (product?.images) {
+      setAdditionalImages(
+        product.images.map((img) => ({
+          id: img.id,
+          previewUrl: img.imagePath,
+          existing: true,
+        }))
+      );
+    }
+  }, [product]);
 
   const addImage = () => {
-    setImages(prev => [...prev, null]);
-    console.log(images)
-  }
-    
-  const removeImage = (index:number) => {
-    setImages(prev => prev.filter((_, i) => i !== index))
-  }
+    setAdditionalImages((prev) => [...prev, { file: null }]);
+  };
 
-  const formData = new FormData();
-  images.forEach((image,i) => {
-    if (image) {
-      formData.append(`images[${i}]`, image); 
-    }
-  });
+  const removeImage = (index: number) => {
+    setAdditionalImages((prev) => {
+      const img = prev[index];
+      if (img.id) {
+        // Mark existing image for deletion
+        setDeletedImageIds((ids) => [...ids, img.id!]);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
-
-
-
-
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>, index: number) {
+  const handleImageChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    index: number
+  ) => {
     const file = e.target.files?.[0];
     if (file) {
-      const newImages = [...images];
-      newImages[index] = file;
-      setImages(newImages);
-      
+      const newImages = [...additionalImages];
+      newImages[index] = {
+        ...newImages[index],
+        file,
+        previewUrl: URL.createObjectURL(file),
+        existing: false,
+      };
+      setAdditionalImages(newImages);
     }
-  }
+  };
 
   return (
-    <form action={action} className="space-y-8">
-      <div className="space-y-2">
-        <Label htmlFor="name">Name</Label>
-        <Input
-          type="text"
-          id="name"
-          name="name"
-          required
-          defaultValue={product?.name || ""}
-        />
-        {error.name && <div className="text-destructive">{error.name}</div>}
+    <form action={action} className="space-y-6 bg-white p-6 rounded-lg shadow-md">
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input
+            type="text"
+            id="name"
+            name="name"
+            required
+            defaultValue={product?.name || ""}
+          />
+          {error.name && <div className="text-destructive">{error.name}</div>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="priceInCents">Price (in cents)</Label>
+          <Input
+            type="number"
+            id="priceInCents"
+            name="priceInCents"
+            required
+            value={priceInCents}
+            onChange={(e) => setPriceInCents(Number(e.target.value) || 0)}
+          />
+          {error.priceInCents && (
+            <div className="text-destructive">{error.priceInCents}</div>
+          )}
+          <div className="text-sm text-muted-foreground">
+            {formatCurrency((priceInCents || 0) / 100)}
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -86,11 +129,13 @@ export function ProductForm({ product }: { product?: Product | null }) {
           name="description"
           required
           defaultValue={product?.description || ""}
+          className="resize-none"
         />
         {error.description && (
           <div className="text-destructive">{error.description}</div>
         )}
       </div>
+
       <div className="space-y-2">
         <Label htmlFor="careguide">How to Care</Label>
         <Textarea
@@ -98,95 +143,95 @@ export function ProductForm({ product }: { product?: Product | null }) {
           name="careguide"
           required
           defaultValue={product?.careguide || ""}
+          className="resize-none"
         />
         {error.careguide && (
           <div className="text-destructive">{error.careguide}</div>
         )}
       </div>
+
       <div className="space-y-2">
         <Label htmlFor="category">Category</Label>
-        <Select name="category">
+        <Select name="category" required defaultValue={product?.category || ""}>
           <SelectTrigger>
-            <SelectValue placeholder="Please choose...." />
+            <SelectValue placeholder="Select a category..." />
           </SelectTrigger>
-
           <SelectContent>
             <SelectItem value="arrangement">Arrangement</SelectItem>
-            <SelectItem value="flower">Flower</SelectItem>
-            <SelectItem value="subscription">Subcription</SelectItem>
+            <SelectItem value="plant">Plant</SelectItem>
+            <SelectItem value="subscription">Subscription</SelectItem>
           </SelectContent>
         </Select>
+        {error.category && (
+          <div className="text-destructive">{error.category}</div>
+        )}
       </div>
 
+      {/* Main Image */}
       <div className="space-y-2">
-        <Label htmlFor="image">Image</Label>
-        <Input type="file" id="image" name="image" required={product == null} />
-        {product != null && (
-          <Image
-            src={product.imagePath}
-            height="400"
-            width="400"
-            alt="Product Image"
-          />
+        <Label htmlFor="image">Main Image</Label>
+        <Input
+          type="file"
+          id="image"
+          name="image"
+          accept="image/*"
+          required={!product}
+        />
+        {product && (
+          <div className="mt-4">
+            <Image
+              src={product.imagePath}
+              height={300}
+              width={300}
+              alt="Product Image"
+              className="rounded-md"
+            />
+          </div>
         )}
         {error.image && <div className="text-destructive">{error.image}</div>}
       </div>
 
+      {/* Additional Images */}
       <div className="space-y-2">
-        <div className="space-y-2">
-          {images.map((img, index) => (
-            <div key={index}>
-              <Input
-                name={`images[${index}]`}
-                type="file"
-                onChange={(e) => handleImageChange(e, index)}
-
-                id={`images[${index}]`}
-                accept="image/*"
-                
-              />
-
-              <Button type="button" onClick={() => removeImage(index)}>
-                Remove
-              </Button>
-            </div>
-          ))}
-
-          <Button type="button" onClick={addImage}>
-            Add more pictures...
-          </Button>
-        </div>
-
-
+        <Label className="text-lg font-semibold">Additional Images</Label>
+        {additionalImages.map((img, index) => (
+          <div key={index} className="flex items-center space-x-4">
+            <Input
+              name={`images[${index}]`}
+              type="file"
+              onChange={(e) => handleImageChange(e, index)}
+              id={`images[${index}]`}
+              accept="image/*"
+            />
+            {img.previewUrl && (
+              <div className="w-24 h-24 relative">
+                <Image
+                  src={img.previewUrl}
+                  alt={`Image ${index + 1}`}
+                  layout="fill"
+                  objectFit="cover"
+                  className="rounded-md"
+                />
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => removeImage(index)}
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button type="button" onClick={addImage} variant="outline">
+          Add more pictures...
+        </Button>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="file">File</Label>
-        <Input type="file" id="file" name="file" required={product == null} />
-        {product != null && (
-          <div className="text-muted-foreground">{product.filePath}</div>
-        )}
-        {error.file && <div className="text-destructive">{error.file}</div>}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="priceInCents">Price(in cents)</Label>
-        <Input
-          type="text"
-          id="priceInCents"
-          name="priceInCents"
-          required
-          value={priceInCents}
-          onChange={(e) => setPriceInCents(Number(e.target.value) || 0)}
-        />
-        {error.priceInCents && (
-          <div className="text-destructive">{error.priceInCents}</div>
-        )}
-      </div>
-
-      <div className="text-muted-foreground">
-        {formatCurrency((priceInCents || 0) / 100)}
-      </div>
+      {/* Hidden input to pass deleted image IDs */}
+      {deletedImageIds.map((id) => (
+        <input key={id} type="hidden" name="deletedImageIds[]" value={id} />
+      ))}
 
       <SubmitButton />
     </form>
@@ -194,11 +239,10 @@ export function ProductForm({ product }: { product?: Product | null }) {
 }
 
 function SubmitButton() {
-  
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" className="w-full" disabled={pending}>
       {pending ? "Saving..." : "Save"}
     </Button>
   );

@@ -95,3 +95,45 @@
   --background-color: #ffffff;
   --logo: url('/logo-light.png');
 }
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  right: -250px; /* Initially off-screen */
+  height: 100vh;
+  width: 250px;
+  z-index: 999;
+  background-color: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(10px);
+  align-items: flex-start;
+  justify-content: flex-start;
+  transition: right 0.3s ease-in-out;
+}
+
+/* When active, the sidebar is visible */
+.sidebar.active {
+  right: 0;
+}
+
+
+/* Hide number input spin buttons in Chrome, Safari, Edge, and Opera */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Hide number input spin buttons in Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Hide elements on mobile */
+@media (max-width: 768px) {
+  .hideOnMobile {
+    display: none;
+  }
+}
