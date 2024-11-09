@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
         'api-token': apiToken,
       },
-      body: JSON.stringify({ paymentType: 'purchase', amount, currency }),
+      body: JSON.stringify({ paymentType: 'preauth', amount, currency }),
     });
 
     if (!response.ok) {

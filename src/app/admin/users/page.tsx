@@ -42,6 +42,7 @@ async function UsersTable() {
       id: true,
       name: true,
       email: true,
+      phone: true,
       _count: {
         select: {
           orders: true,
@@ -61,6 +62,7 @@ async function UsersTable() {
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
+          <TableHead>Phone</TableHead>
           <TableHead>Email</TableHead>
           <TableHead>Orders</TableHead>
           <TableHead className="w-0">
@@ -72,6 +74,7 @@ async function UsersTable() {
         {users.map((user) => (
           <TableRow key={user.id}>
             <TableCell>{user.name}</TableCell>
+            <TableCell>{user.phone}</TableCell>
             <TableCell>{user.email}</TableCell>
             <TableCell>{formatNumber(user._count.orders)}</TableCell>
             <TableCell>
@@ -84,6 +87,12 @@ async function UsersTable() {
                   <DropdownMenuItem asChild>
                     <Link href={`/admin/users/${user.id}/edit`}>
                       Edit
+                    </Link>
+                  </DropdownMenuItem>
+                  <hr></hr>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/admin/users/${user.id}/remove`} className="text-red-500">
+                      REMOVE
                     </Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>

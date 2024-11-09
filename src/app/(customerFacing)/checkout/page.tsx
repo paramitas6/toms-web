@@ -1,585 +1,515 @@
-"use client";
+// src/app/(customerFacing)/checkout/page.tsx
 
-import React, { useContext, useState, useEffect } from "react";
-import CartContext, { CartItem } from "../_components/CartComponent";
+'use client';
+
+import React, { useContext, useState, useEffect, useCallback } from "react";
+import CartContext from "@/app/(customerFacing)/_components/CartComponent";
 import Link from "next/link";
-import Image from "next/image";
-import { formatCurrency } from "@/lib/formatters";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import Script from "next/script";
+import DeliveryOptions from "./_components/DeliveryOptions";
+import CartItem from "./_components/CartItems";
+import OrderSummary from "./_components/OrderSummary";
+import GuestCheckout from "./_components/GuestCheckout";
+import WaiverModal from "./_components/WaiverModal";
+import { Button } from "@/components/ui/button";
+import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Head from "next/head"; // Import Head to include scripts in the head section
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 declare global {
   function appendHelcimPayIframe(checkoutToken: string): void;
 }
 
+const schema = z.object({
+  isGuest: z.boolean(),
+  guestEmail: z.union([z.string().email(), z.literal(''), z.null()]).optional(),
+  deliveryOption: z.enum(["pickup", "delivery"]),
+  recipientName: z.string().optional(),
+  deliveryAddress: z.string().optional(),
+  deliveryInstructions: z.string().optional(),
+  postalCode: z.string().optional(),
+  selectedDate: z.string().min(1, "Delivery date is required."),
+  selectedTime: z.string().min(1, "Delivery time is required."),
+});
+
+type FormData = z.infer<typeof schema>;
+
+interface User {
+  email: string;
+  name: string;
+  phone?: string;
+}
+
 const CheckoutPage = () => {
   const { cart, clearCart } = useContext(CartContext);
-  const [cartItems, setCartItems] = useState<CartItem[]>(cart.items);
-  const [postalCode, setPostalCode] = useState<string>("");
+  const router = useRouter();
+  const { toast } = useToast();
+  const [showWaiver, setShowWaiver] = useState<boolean>(false);
+  const [waiverAccepted, setWaiverAccepted] = useState<boolean>(false);
+  const [secretToken, setSecretToken] = useState<string>("");
+  const [checkoutToken, setCheckoutToken] = useState<string>("");
+  const [scriptLoaded, setScriptLoaded] = useState<boolean>(false);
+  const [formData, setFormData] = useState<FormData>({
+    isGuest: true,
+    guestEmail: "",
+    deliveryOption: "pickup",
+    recipientName: "",
+    deliveryAddress: "",
+    deliveryInstructions: "",
+    postalCode: "",
+    selectedDate: "",
+    selectedTime: "",
+  });
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
   const [deliveryFeeError, setDeliveryFeeError] = useState<string>("");
   const [loadingDeliveryFee, setLoadingDeliveryFee] = useState<boolean>(false);
-  const [deliveryOption, setDeliveryOption] = useState<string>("pickup");
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [selectedTime, setSelectedTime] = useState<string>("");
-  const [recipientName, setRecipientName] = useState<string>("");
-  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
-  const [deliveryInstructions, setDeliveryInstructions] = useState<string>("");
-  const [showWaiver, setShowWaiver] = useState<boolean>(false);
-  const [waiverAccepted, setWaiverAccepted] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const router = useRouter();
+  const amountWithoutTax = cart.items.reduce(
+    (acc, item) => acc + (item.quantity * item.priceInCents) / 100,
+    0
+  );
+  const taxAmount = (amountWithoutTax + deliveryFee) * 0.13;
+  const totalAmount = amountWithoutTax + taxAmount + deliveryFee;
 
-  const [secretToken, setSecretToken] = useState<string>("");
-  const [checkoutToken, setCheckoutToken] = useState<string>(""); // Store checkoutToken for use in event listener
-
-  const handleInputChange = (
-    index: number,
-    field: "cardMessage",
-    value: string
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => {
-    const updatedItems = [...cartItems];
-    updatedItems[index][field] = value;
-    setCartItems(updatedItems);
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
-  const handlePlaceOrder = async () => {
-    if (deliveryOption === "delivery" && !waiverAccepted) {
+  const validate = useCallback(() => {
+    const result = schema.safeParse(formData);
+    if (!result.success) {
+      const newErrors: { [key: string]: string } = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) newErrors[err.path[0] as string] = err.message;
+      });
+      setErrors(newErrors);
+      Object.values(newErrors).forEach((message) => {
+        toast({
+          variant: "destructive",
+          description: message,
+        });
+      });
+      return false;
+    }
+    setErrors({});
+    return true;
+  }, [formData, toast]);
+
+  const processOrder = async (transaction: any, transactionId: string) => {
+    try {
+      const response = await fetch("/api/processOrder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cartItems: cart.items,
+          deliveryOption: formData.deliveryOption,
+          recipientName: formData.recipientName,
+          deliveryAddress: formData.deliveryAddress,
+          deliveryInstructions: formData.deliveryInstructions,
+          postalCode: formData.postalCode,
+          selectedDate: formData.selectedDate,
+          selectedTime: formData.selectedTime,
+          amountWithoutTax,
+          taxAmount,
+          deliveryFee,
+          totalAmount,
+          transaction,
+          transactionId,
+          secretToken,
+          isGuest: formData.isGuest,
+          guestEmail: formData.isGuest ? formData.guestEmail : "",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast({
+          variant: "destructive",
+          description:
+            errorData.message ||
+            "Error processing order. Please contact support.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      const result = await response.json();
+      const orderId = result.orderId;
+      clearCart();
+      window.location.href = `/order-confirmation?orderId=${orderId}`;
+    } catch (error) {
+      console.error("Error processing order:", error);
+      toast({
+        variant: "destructive",
+        description: "Error processing order. Please try again.",
+      });
+      setLoading(false);
+    }
+  };
+
+  const handlePaymentSuccess = async (transaction: any, transactionId: string) => {
+    await processOrder(transaction, transactionId);
+  };
+
+  const handleMessage = useCallback(
+    async (event: MessageEvent) => {
+      const identifier = "helcim-pay-js-" + checkoutToken;
+      if (event.data.eventName === identifier) {
+        if (event.data.eventStatus === "ABORTED") {
+          toast({
+            variant: "destructive",
+            description: "Transaction failed! Please try again.",
+          });
+          const frame = document.getElementById("helcimPayIframe");
+          frame?.remove();
+          setLoading(false);
+        }
+        if (event.data.eventStatus === "SUCCESS") {
+          const transaction =
+            typeof event.data.eventMessage === "string"
+              ? JSON.parse(event.data.eventMessage)
+              : event.data.eventMessage;
+          const transactionId = transaction.data?.data?.transactionId;
+          await handlePaymentSuccess(transaction, transactionId);
+        }
+      }
+    },
+    [checkoutToken, handlePaymentSuccess, toast]
+  );
+
+  useEffect(() => {
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [handleMessage]);
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!validate()) return;
+    if (formData.deliveryOption === "delivery" && !waiverAccepted) {
       setShowWaiver(true);
       return;
     }
 
-    const amount = totalAmount.toFixed(2);
+    setLoading(true);
 
+    const amount = totalAmount.toFixed(2);
     try {
       const response = await fetch("/api/initiatePayment", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ amount, currency: "CAD" }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, type: "preauth", currency: "CAD" }),
       });
 
-      const data = await response.json();
-      console.log("Initiate Payment Response:", data);
-
-      const { checkoutToken, secretToken } = data;
-      setCheckoutToken(checkoutToken); // Store checkoutToken in state
-      setSecretToken(secretToken);
-
-      // Render the HelcimPay.js modal
-      appendHelcimPayIframe(checkoutToken); // Call the function directly
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  };
-
-  const amountWithoutTax = cartItems.reduce(
-    (acc, item) => acc + (item.quantity * item.priceInCents) / 100,
-    0
-  );
-
-  const taxAmount = (amountWithoutTax + deliveryFee) * 0.13;
-  const totalAmount = amountWithoutTax + taxAmount + deliveryFee;
-
-  useEffect(() => {
-    const fetchDeliveryFee = async () => {
-      if (deliveryOption !== "delivery" || postalCode.trim() === "") {
-        setDeliveryFee(0);
-        setDeliveryFeeError("");
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast({
+          variant: "destructive",
+          description:
+            errorData.message || "Error initiating payment. Please try again.",
+        });
+        setLoading(false);
         return;
       }
 
-      setLoadingDeliveryFee(true);
-      setDeliveryFeeError("");
+      const dataResponse = await response.json();
+      const { checkoutToken, secretToken } = dataResponse;
 
-      try {
-        const response = await fetch("/api/getDeliveryFee", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ postalCode }),
+      if (!checkoutToken || !secretToken) {
+        toast({
+          variant: "destructive",
+          description: "Missing tokens in response. Please contact support.",
         });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Unable to calculate delivery fee.");
-        }
-
-        const data = await response.json();
-        setDeliveryFee(data.deliveryFeeInCents / 100); // Convert to dollars
-      } catch (error: any) {
-        setDeliveryFee(0);
-        setDeliveryFeeError(error.message || "Unable to calculate delivery fee.");
-      } finally {
-        setLoadingDeliveryFee(false);
+        setLoading(false);
+        return;
       }
-    };
 
-    fetchDeliveryFee();
-  }, [postalCode, deliveryOption]);
+      setCheckoutToken(checkoutToken);
+      setSecretToken(secretToken);
 
-  // Handle transaction response from HelcimPay.js
-  useEffect(() => {
-    const handleMessage = async (event: MessageEvent) => {
-      const helcimPayJsIdentifierKey = "helcim-pay-js-" + checkoutToken;
-
-      if (event.data.eventName === helcimPayJsIdentifierKey) {
-        if (event.data.eventStatus === "ABORTED") {
-          console.error("Transaction failed!", event.data.eventMessage);
-
-          // Remove the HelcimPay.js iFrame
-          const frame = document.getElementById("helcimPayIframe");
-          if (frame) {
-            frame.remove();
-          }
-        }
-
-        if (event.data.eventStatus === "SUCCESS") {
-          console.log("Transaction success!", event.data.eventMessage);
-          const transaction = JSON.parse(event.data.eventMessage);
-
-          // Verify the transaction using secretToken
-          const isValid = verifyTransaction(transaction, secretToken);
-
-          if (isValid) {
-            // Send order details and transaction data to backend
-            try {
-              const response = await fetch("/api/processOrder", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  cartItems,
-                  deliveryOption,
-                  recipientName,
-                  deliveryAddress,
-                  deliveryInstructions,
-                  postalCode,
-                  selectedDate,
-                  selectedTime,
-                  amountWithoutTax,
-                  taxAmount,
-                  deliveryFee,
-                  totalAmount,
-                  transaction,
-                }),
-              });
-
-              if (!response.ok) {
-                const errorData = await response.json();
-                console.error("Error processing order:", errorData);
-                return;
-              }
-
-              const result = await response.json();
-
-              // Clear cart, redirect to order confirmation page, etc.
-              clearCart();
-              router.push("/order-confirmation");
-            } catch (error) {
-              console.error("Error:", error);
-            }
-          } else {
-            console.error("Transaction verification failed.");
-          }
-
-          // Remove the HelcimPay.js iFrame
-          const frame = document.getElementById("helcimPayIframe");
-          if (frame) {
-            frame.remove();
-          }
-        }
+      if (typeof appendHelcimPayIframe === "function") {
+        appendHelcimPayIframe(checkoutToken);
+      } else {
+        toast({
+          variant: "destructive",
+          description: "Payment processing error. Please try again.",
+        });
+        setLoading(false);
       }
-    };
-
-    window.addEventListener("message", handleMessage);
-
-    return () => {
-      window.removeEventListener("message", handleMessage);
-    };
-  }, [
-    checkoutToken, // Added checkoutToken to dependencies
-    cartItems,
-    deliveryOption,
-    recipientName,
-    deliveryAddress,
-    deliveryInstructions,
-    postalCode,
-    selectedDate,
-    selectedTime,
-    amountWithoutTax,
-    taxAmount,
-    deliveryFee,
-    totalAmount,
-    clearCart,
-    secretToken,
-  ]);
-
-  // Function to verify transaction using secretToken
-  const verifyTransaction = (transaction: any, secretToken: string): boolean => {
-    // Implement verification logic as per Helcim's documentation
-    return true;
-  };
-
-  // Generate time slots (2-hour intervals from 9 AM to 6 PM)
-  const generateTimeSlots = () => {
-    const timeSlots = [];
-    for (let hour = 9; hour < 18; hour += 2) {
-      const start = hour;
-      const end = hour + 2;
-      timeSlots.push(`${start}:00 - ${end}:00`);
+    } catch (error) {
+      console.error("Error initiating payment:", error);
+      toast({
+        variant: "destructive",
+        description: "Error initiating payment. Please try again.",
+      });
+      setLoading(false);
     }
-    return timeSlots;
   };
+
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 10; hour < 18; hour += 2) {
+      const startHour = hour % 12 === 0 ? 12 : hour % 12;
+      const endHour = (hour + 2) % 12 === 0 ? 12 : (hour + 2) % 12;
+      const period = hour < 12 ? "AM" : "PM";
+      slots.push(`${startHour} ${period} - ${endHour} ${period}`);
+    }
+    return slots;
+  };
+
+  const [loadingUser, setLoadingUser] = useState<boolean>(true);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/auth/user", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await response.json();
+        if (data.user) {
+          setFormData((prev) => ({
+            ...prev,
+            isGuest: false,
+            guestEmail: data.user.email,
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    fetchUser();
+  }, []);
+
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen py-8">
-      <Head>
-        <script
-          type="text/javascript"
-          src="https://secure.helcim.app/helcim-pay/services/start.js"
-        ></script>
-      </Head>
-      <div className="container mx-auto px-4">
-        <h1 className="text-3xl font-kuhlenbach text-center mb-6">
-          Checkout
-        </h1>
+    <>
+      <Script
+        src="https://secure.helcim.app/helcim-pay/services/start.js"
+        onLoad={() => setScriptLoaded(true)}
+        onError={(e) => {
+          toast({
+            variant: "destructive",
+            description: "Failed to load payment script. Please try again.",
+          });
+        }}
+      />
+      <div className="min-h-screen py-8">
+        <div className="w-2/3 mx-auto p-4">
+          <h1 className="text-5xl font-gotham tracking-wider text-center m-8">
+            Checkout
+          </h1>
 
-        {cartItems.length > 0 ? (
-          <div className="flex flex-col lg:flex-row lg:space-x-8">
-            {/* Checkout Items Section */}
-            <div className="w-full lg:w-2/3">
-              {cartItems.map((cartItem, index) => (
-                <div
-                  key={cartItem.productId}
-                  className="flex flex-col md:flex-row items-center bg-white shadow-md rounded-lg p-4 mb-6"
-                >
-                  {/* Product Image */}
-                  <div className="w-full md:w-1/3 flex justify-center">
-                    <Image
-                      src={cartItem.image}
-                      alt={cartItem.name}
-                      width={200}
-                      height={200}
-                      className="object-cover rounded-lg"
-                    />
-                  </div>
+          {!formData.isGuest && (
+            <div className="mb-4 p-4 bg-green-100 text-green-800 rounded">
+              <p>
+                You are logged in as <strong>{formData.guestEmail}</strong>. Your
+                email will be used for this checkout.
+              </p>
+            </div>
+          )}
 
-                  {/* Product Info */}
-                  <div className="w-full md:w-2/3 md:pl-6 mt-4 md:mt-0">
-                    <h2 className="text-3xl font-kuhlenbach text-black ">
-                      {cartItem.name}
-                    </h2>
-                    <p className="text-gray-700 mt-1">
-                      {formatCurrency(cartItem.priceInCents / 100)} / item
-                    </p>
-                    <p className="text-gray-700">
-                      Quantity: {cartItem.quantity}
-                    </p>
+          <div className="flex mx-auto gap-4 font-montserrat">
+            <div className="flex flex-col w-1/4">
+              <GuestCheckout
+                isGuest={formData.isGuest}
+                setIsGuest={(value) =>
+                  setFormData((prev) => ({ ...prev, isGuest: value }))
+                }
+                guestEmail={formData.guestEmail || ""}
+                setGuestEmail={(value) =>
+                  setFormData((prev) => ({ ...prev, guestEmail: value }))
+                }
+                disabled={!formData.isGuest}
+              />
 
-                    {/* Card Message */}
-                    <div className="mt-3">
-                      <Label
-                        htmlFor={`cardMessage-${index}`}
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Card Message
-                      </Label>
-                      <textarea
-                        id={`cardMessage-${index}`}
-                        className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
-                        rows={2}
-                        placeholder="Enter a message to be attached..."
-                        value={cartItem.cardMessage || ""}
-                        onChange={(e) =>
-                          handleInputChange(index, "cardMessage", e.target.value)
-                        }
-                      ></textarea>
+              <div className="">
+                <div className="mb-4">
+                  <Label htmlFor="selectedDate">Date*</Label>
+                  <Input
+                    type="date"
+                    id="selectedDate"
+                    name="selectedDate"
+                    value={formData.selectedDate}
+                    onChange={handleChange}
+                    min={new Date().toISOString().split("T")[0]}
+                    required
+                    className="mt-1 block w-full"
+                  />
+                </div>
+                <div className="mb-4">
+                  <Label htmlFor="selectedTime">Time*</Label>
+                  <Select
+                    name="selectedTime"
+                    value={formData.selectedTime}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        selectedTime: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a time slot" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Before 10AM">Before 10AM</SelectItem>
+                      {generateTimeSlots().map((slot, idx) => (
+                        <SelectItem key={idx} value={slot}>
+                          {slot}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DeliveryOptions
+                deliveryOption={formData.deliveryOption}
+                setDeliveryOption={(option: string) => {
+                  if (option === "pickup" || option === "delivery") {
+                    setFormData((prev) => ({
+                      ...prev,
+                      deliveryOption: option,
+                    }));
+                  }
+                }}
+                recipientName={formData.recipientName || ""}
+                setRecipientName={(value) =>
+                  setFormData((prev) => ({ ...prev, recipientName: value }))
+                }
+                deliveryAddress={formData.deliveryAddress || ""}
+                setDeliveryAddress={(value) =>
+                  setFormData((prev) => ({ ...prev, deliveryAddress: value }))
+                }
+                deliveryInstructions={formData.deliveryInstructions || ""}
+                setDeliveryInstructions={(value) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    deliveryInstructions: value,
+                  }))
+                }
+                postalCode={formData.postalCode || ""}
+                setPostalCode={(value) =>
+                  setFormData((prev) => ({ ...prev, postalCode: value }))
+                }
+                deliveryFeeError={deliveryFeeError}
+                setDeliveryFeeError={setDeliveryFeeError}
+                loadingDeliveryFee={loadingDeliveryFee}
+                setLoadingDeliveryFee={setLoadingDeliveryFee}
+                deliveryFee={deliveryFee}
+                setDeliveryFee={setDeliveryFee}
+              />
+            </div>
+            <div className="flex flex-col w-full">
+              {cart.items.length > 0 ? (
+                <div className="flex flex-col lg:flex-row lg:space-x-8">
+                  <div className="w-full p-6">
+                    <div className="space-y-2">
+                      {cart.items.map((cartItem) => (
+                        <CartItem
+                          key={cartItem.id}
+                          cartItem={cartItem}
+                          incrementItemQuantity={() => {}}
+                          decrementItemQuantity={() => {}}
+                          deleteItemFromCart={() => {}}
+                          updateCartItem={() => {}}
+                          editableMessage={false}
+                          adjustableQuantity={false}
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>
-              ))}
-
-              <div className="text-center">
-                <Link href="/shop" className="text-red-600 hover:text-red-800">
-                  Continue Shopping
-                </Link>
+              ) : (
+                <div className="text-center text-black mt-8">
+                  <Link href="/shop">
+                    <Button className="mt-4 bg-red-500 text-white py-3 px-6 rounded hover:bg-red-600">
+                      Go Back to Shop
+                    </Button>
+                  </Link>
+                </div>
+              )}
+              <div className="p-6">
+                <OrderSummary
+                  amountWithoutTax={amountWithoutTax}
+                  taxAmount={taxAmount}
+                  deliveryFee={deliveryFee}
+                  deliveryOption={formData.deliveryOption}
+                  loadingDeliveryFee={loadingDeliveryFee}
+                  deliveryFeeError={deliveryFeeError}
+                  totalAmount={totalAmount}
+                />
               </div>
             </div>
-
-            {/* Order Summary Section */}
-            <aside className="w-full lg:w-1/3 mt-8 lg:mt-0">
-              <div className="bg-white shadow-md rounded-lg p-6">
-                <h3 className="text-2xl font-kuhlenbach text-black mb-4 text-center">
-                  Order Summary
-                </h3>
-                <div className="space-y-4">
-                  {/* Delivery Option */}
-                  <div>
-                    <Label className="block text-sm font-medium text-gray-700">
-                      Choose an Option
-                    </Label>
-                    <div className="mt-2 flex justify-around">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          className="form-radio text-red-500"
-                          name="deliveryOption"
-                          value="pickup"
-                          checked={deliveryOption === "pickup"}
-                          onChange={() => setDeliveryOption("pickup")}
-                        />
-                        <span className="ml-2">Pickup</span>
-                      </label>
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          className="form-radio text-red-500"
-                          name="deliveryOption"
-                          value="delivery"
-                          checked={deliveryOption === "delivery"}
-                          onChange={() => setDeliveryOption("delivery")}
-                        />
-                        <span className="ml-2">Delivery</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Delivery Details */}
-                  {deliveryOption === "delivery" && (
-                    <div className="space-y-4">
-                      {/* Recipient Name */}
-                      <div>
-                        <Label htmlFor="recipientName">Recipient Name</Label>
-                        <Input
-                          id="recipientName"
-                          type="text"
-                          placeholder="Enter recipient's name"
-                          value={recipientName}
-                          onChange={(e) => setRecipientName(e.target.value)}
-                          className="mt-1 focus:border-red-500 focus:ring-red-500"
-                        />
-                      </div>
-
-                      {/* Delivery Address */}
-                      <div>
-                        <Label htmlFor="deliveryAddress">Delivery Address</Label>
-                        <textarea
-                          id="deliveryAddress"
-                          placeholder="Enter delivery address"
-                          value={deliveryAddress}
-                          onChange={(e) => setDeliveryAddress(e.target.value)}
-                          className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
-                          rows={2}
-                        ></textarea>
-                      </div>
-
-                      {/* Delivery Instructions */}
-                      <div>
-                        <Label htmlFor="deliveryInstructions">
-                          Delivery Instructions
-                        </Label>
-                        <textarea
-                          id="deliveryInstructions"
-                          placeholder="Enter any delivery instructions..."
-                          value={deliveryInstructions}
-                          onChange={(e) =>
-                            setDeliveryInstructions(e.target.value)
-                          }
-                          className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
-                          rows={2}
-                        ></textarea>
-                      </div>
-
-                      {/* Postal Code Input */}
-                      <div>
-                        <Label htmlFor="postalCode">Postal Code</Label>
-                        <Input
-                          id="postalCode"
-                          type="text"
-                          placeholder="Enter postal code"
-                          value={postalCode}
-                          onChange={(e) =>
-                            setPostalCode(e.target.value.toUpperCase())
-                          }
-                          className="mt-1 focus:border-red-500 focus:ring-red-500"
-                        />
-                        {deliveryFeeError && (
-                          <p className="text-red-600 text-sm mt-1">
-                            {deliveryFeeError}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Date Selection */}
-                  <div>
-                    <Label htmlFor="deliveryDate">Select Date</Label>
-                    <Input
-                      id="deliveryDate"
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="mt-1 w-full focus:border-red-500 focus:ring-red-500"
-                    />
-                  </div>
-
-                  {/* Time Window Selection */}
-                  <div>
-                    <Label htmlFor="deliveryTime">Select Time Window</Label>
-                    <select
-                      id="deliveryTime"
-                      value={selectedTime}
-                      onChange={(e) => setSelectedTime(e.target.value)}
-                      className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
-                    >
-                      <option value="">Select a time window</option>
-                      {generateTimeSlots().map((slot) => (
-                        <option key={slot} value={slot}>
-                          {slot}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <ul className="space-y-2 mt-4">
-                    <li className="flex justify-between text-gray-700">
-                      <span>Subtotal</span>
-                      <span>{formatCurrency(amountWithoutTax)}</span>
-                    </li>
-                    <li className="flex justify-between text-gray-700">
-                      <span>13% HST</span>
-                      <span>${taxAmount.toFixed(2)}</span>
-                    </li>
-                    {deliveryOption === "delivery" && (
-                      <li className="flex justify-between text-gray-700">
-                        <span>Delivery Fee</span>
-                        {loadingDeliveryFee ? (
-                          <span>Calculating...</span>
-                        ) : (
-                          <span>
-                            {deliveryFee > 0
-                              ? formatCurrency(deliveryFee)
-                              : deliveryFeeError
-                              ? "N/A"
-                              : "$0.00"}
-                          </span>
-                        )}
-                      </li>
-                    )}
-                    <li className="flex justify-between text-black font-semibold border-t border-gray-300 pt-2">
-                      <span>Total</span>
-                      <span className="text-black">
-                        {formatCurrency(totalAmount)}
-                      </span>
-                    </li>
-                  </ul>
-                  <div className="mt-6">
-                    <Button
-                      className="w-full bg-red-500 text-white py-3 rounded hover:bg-red-600"
-                      type="button"
-                      onClick={handlePlaceOrder}
-                      disabled={
-                        !selectedDate ||
-                        !selectedTime ||
-                        (deliveryOption === "delivery" &&
-                          (!postalCode ||
-                            !recipientName ||
-                            !deliveryAddress ||
-                            !!deliveryFeeError ||
-                            loadingDeliveryFee))
-                      }
-                    >
-                      Place Order
-                    </Button>
-                    <Link
-                      href="/cart"
-                      className="mt-4 block text-center text-red-600 hover:text-red-800"
-                    >
-                      Back to Cart
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </aside>
           </div>
-        ) : (
-          <div className="text-center text-black mt-8">
-            <p className="text-xl">Your cart is empty.</p>
-            <Link href="/shop">
-              <Button className="mt-4 bg-red-500 text-white py-3 px-6 rounded hover:bg-red-600">
-                Go Back to Shop
-              </Button>
+
+          <WaiverModal
+            showWaiver={showWaiver}
+            setShowWaiver={setShowWaiver}
+            waiverAccepted={waiverAccepted}
+            setWaiverAccepted={setWaiverAccepted}
+            handlePlaceOrder={() => handleSubmit()}
+          />
+
+          <div className="mt-6">
+            <Button
+              className="w-full bg-black text-white py-3 hover:bg-gray-800 font-oSans text-lg"
+              type="button"
+              onClick={() => handleSubmit()}
+              disabled={
+                loading ||
+                !formData.selectedDate ||
+                !formData.selectedTime ||
+                (formData.deliveryOption === "delivery" &&
+                  (!formData.postalCode ||
+                    !formData.recipientName ||
+                    !formData.deliveryAddress ||
+                    !!deliveryFeeError ||
+                    loadingDeliveryFee ||
+                    (formData.isGuest && !formData.guestEmail)))
+              }
+            >
+              {loading ? "Processing..." : "Place Order"}
+            </Button>
+            <Link
+              href="/cart"
+              className="mt-4 block text-center text-red-600 hover:text-red-800 font-oSans"
+            >
+              Back to Cart
             </Link>
           </div>
-        )}
-
-        {/* Waiver Modal */}
-        {showWaiver && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div className="bg-white rounded-lg p-6 w-11/12 md:w-1/2">
-              <h2 className="text-xl font-kuhlenbach mb-4 text-center">
-                Please Review Your Delivery Details
-              </h2>
-              <p className="text-gray-700 mb-4">
-                Please ensure the delivery address and instructions are correct.
-                If the recipient is not home, our delivery person will leave the
-                flowers at the front door. We are not responsible for any damage
-                due to extreme weather conditions such as excessive heat or
-                cold.
-              </p>
-              <div className="flex items-center mb-4">
-                <input
-                  id="waiverAccepted"
-                  type="checkbox"
-                  checked={waiverAccepted}
-                  onChange={(e) => setWaiverAccepted(e.target.checked)}
-                  className="form-checkbox text-red-500"
-                />
-                <label
-                  htmlFor="waiverAccepted"
-                  className="ml-2 text-gray-700"
-                >
-                  I have double-checked the address and accept the terms.
-                </label>
-              </div>
-              <div className="flex justify-end space-x-4">
-                <Button
-                  className="bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400"
-                  onClick={() => setShowWaiver(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className={`py-2 px-4 rounded ${
-                    waiverAccepted
-                      ? "bg-red-500 text-white hover:bg-red-600"
-                      : "bg-gray-300 text-gray-700 cursor-not-allowed"
-                  }`}
-                  onClick={() => {
-                    if (waiverAccepted) {
-                      setShowWaiver(false);
-                      // Proceed to place order
-                      handlePlaceOrder(); // Call handlePlaceOrder to continue
-                    }
-                  }}
-                  disabled={!waiverAccepted}
-                >
-                  Confirm Order
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

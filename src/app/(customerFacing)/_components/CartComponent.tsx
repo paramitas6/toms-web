@@ -1,10 +1,13 @@
+// src/app/_components/CartComponent.tsx
+
 "use client";
 
 import { createContext, useState, useEffect, ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { v4 as uuidv4 } from "uuid";
 
 // Define types for cart items and the cart context
 export interface CartItem {
+  id: string;
   productId: string;
   name: string;
   priceInCents: number;
@@ -23,7 +26,10 @@ interface CartContextType {
   cart: Cart;
   addItemToCart: (item: CartItem) => void;
   deleteItemFromCart: (id: string) => void;
-  clearCart: () => void; // Added clearCart
+  updateCartItem: (item: CartItem) => void;
+  clearCart: () => void;
+  incrementItemQuantity: (id: string) => void;
+  decrementItemQuantity: (id: string) => void;
 }
 
 // Default cart context value
@@ -31,7 +37,10 @@ const defaultCartContext: CartContextType = {
   cart: { items: [] },
   addItemToCart: () => {},
   deleteItemFromCart: () => {},
-  clearCart: () => {}, // Added clearCart
+  updateCartItem: () => {},
+  clearCart: () => {},
+  incrementItemQuantity: () => {},
+  decrementItemQuantity: () => {},
 };
 
 // Create the context with a default value
@@ -39,8 +48,8 @@ const CartContext = createContext<CartContextType>(defaultCartContext);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cart, setCart] = useState<Cart>({ items: [] });
-  const router = useRouter();
 
+  // Initialize cart from localStorage on mount
   useEffect(() => {
     const storedCart = localStorage.getItem("cart");
     if (storedCart) {
@@ -48,41 +57,75 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const saveCartToLocalStorage = (newCart: Cart) => {
-    localStorage.setItem("cart", JSON.stringify(newCart));
-  };
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("cart", JSON.stringify(cart));
+  }, [cart]);
 
+  // Helper function to compare cart items
+  function areItemsEqual(item1: CartItem, item2: CartItem) {
+    return (
+      item1.productId === item2.productId &&
+      item1.cardMessage === item2.cardMessage &&
+      item1.deliveryInstructions === item2.deliveryInstructions
+    );
+  }
+
+  // Add item to cart or update quantity if it already exists
   const addItemToCart = (item: CartItem) => {
     setCart((prevCart) => {
-      const existingItem = prevCart.items.find(
-        (i) => i.productId === item.productId
-      );
+      const existingItem = prevCart.items.find((i) => areItemsEqual(i, item));
 
       let updatedItems;
       if (existingItem) {
         updatedItems = prevCart.items.map((i) =>
-          i.productId === item.productId ? { ...i, quantity: item.quantity } : i
+          areItemsEqual(i, item) ? { ...i, quantity: i.quantity + 1 } : i
         );
       } else {
-        updatedItems = [...prevCart.items, item];
+        updatedItems = [...prevCart.items, { ...item }];
       }
 
-      const updatedCart = { items: updatedItems };
-      saveCartToLocalStorage(updatedCart);
-      return updatedCart;
+      return { items: updatedItems };
     });
   };
 
+  // Delete item from cart by id
   const deleteItemFromCart = (id: string) => {
-    setCart((prevCart) => {
-      const updatedItems = prevCart.items.filter((item) => item.productId !== id);
-      const updatedCart = { items: updatedItems };
-      saveCartToLocalStorage(updatedCart);
-      return updatedCart;
-    });
+    setCart((prevCart) => ({
+      items: prevCart.items.filter((item) => item.id !== id),
+    }));
   };
 
-  // Added clearCart function
+  // Update specific fields of a cart item
+  const updateCartItem = (updatedItem: CartItem) => {
+    setCart((prevCart) => ({
+      items: prevCart.items.map((item) =>
+        item.id === updatedItem.id ? { ...item, ...updatedItem } : item
+      ),
+    }));
+  };
+
+  // Increment item quantity by id
+  const incrementItemQuantity = (id: string) => {
+    setCart((prevCart) => ({
+      items: prevCart.items.map((item) =>
+        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
+      ),
+    }));
+  };
+
+  // Decrement item quantity by id
+  const decrementItemQuantity = (id: string) => {
+    setCart((prevCart) => ({
+      items: prevCart.items
+        .map((item) =>
+          item.id === id ? { ...item, quantity: item.quantity - 1 } : item
+        )
+        .filter((item) => item.quantity > 0),
+    }));
+  };
+
+  // Clear the entire cart
   const clearCart = () => {
     setCart({ items: [] });
     localStorage.removeItem("cart");
@@ -90,7 +133,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <CartContext.Provider
-      value={{ cart, addItemToCart, deleteItemFromCart, clearCart }}
+      value={{
+        cart,
+        addItemToCart,
+        deleteItemFromCart,
+        updateCartItem,
+        clearCart,
+        incrementItemQuantity,
+        decrementItemQuantity,
+      }}
     >
       {children}
     </CartContext.Provider>

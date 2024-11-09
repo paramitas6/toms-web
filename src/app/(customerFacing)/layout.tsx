@@ -1,4 +1,6 @@
-import CustomerNav from "@/components/CustomerNav";
+// src/app/(customerFacing)/layout.tsx
+
+import CustomerNav from "@/app/(customerFacing)/_components/CustomerNav";
 
 export default function CustomerLayout({
   children,
@@ -6,10 +8,16 @@ export default function CustomerLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="">
+    <>
+    <div className="flex flex-col min-h-screen">
       <CustomerNav />
 
-      <div className="container">{children}</div>
+      {/* Main Content Area */}
+      <div className="flex-grow">{children}</div>
     </div>
+    <footer>
+    <h1 className="text-center font-oSans">@2024 Tom's Florist - All Rights Reserved</h1>
+    </footer>
+    </>
   );
 }

@@ -1,0 +1,11 @@
+{
+  "name": "@api/helcimdevdocs",
+  "version": "2.0.0",
+  "main": "./index.ts",
+  "types": "./index.d.ts",
+  "dependencies": {
+    "api": "^7.0.0-beta.10",
+    "json-schema-to-ts": "^2.8.0-beta.0",
+    "oas": "^25.0.3"
+  }
+}

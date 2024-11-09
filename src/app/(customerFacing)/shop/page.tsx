@@ -1,3 +1,5 @@
+// src\app\(customerFacing)\shop\page.tsx 
+
 import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
 import db from "@/db/db";
 import { cache } from "@/lib/cache";
@@ -15,7 +17,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-import {ProductDialogContent} from "../_components/ProductDialogContent";
+import { ProductDialogContent } from "../_components/ProductDialogContent";
+import { ProductDialog } from "../_components/ProductDialog";
 
 import { formatCurrency } from "@/lib/formatters";
 import { ShoppingCartIcon } from "lucide-react";
@@ -24,18 +27,18 @@ import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export default function ProductsPage() {
+export default function ShopPage() {
   return (
     <>
       <div className="mt-4">
         {/* Banner text */}
         <div className="border-b border-gray-200 p-4">
-          <h1 className=" text-2xl  font-kuhlenbach text-center">
-            A collection of floral enchantments.
+        <h1 className="text-5xl text-center font-oSans text-gray-700 m-4 tracking-wider">
+            A collection of floral enchantments
           </h1>
         </div>
 
-        <div className="gap-4 gap-x-8 grid grid-cols-2 mt-4  md:grid-cols-2 lg:grid-cols-3">
+        <div className="gap-4 gap-x-4 grid grid-cols-2 m-4  md:grid-cols-2 lg:grid-cols-3">
           <Suspense
             fallback={
               <>
@@ -52,8 +55,8 @@ export default function ProductsPage() {
           </Suspense>
         </div>
       </div>
-      <div className="mt-4">
-        {/* Banner text */}
+      {/* <div className="mt-4">
+        
         <div className="border-b border-gray-200 p-4">
           <h1 className=" text-2xl  font-kuhlenbach text-center">
             Step into Our Plant Paradise
@@ -76,7 +79,8 @@ export default function ProductsPage() {
             <PlantsSuspense />
           </Suspense>
         </div>
-      </div>
+      </div> */}
+      
     </>
   );
 }
@@ -127,27 +131,6 @@ const getArrangementImages = cache(
   { revalidate: 20 }
 );
 
-async function PlantsSuspense() {
-  const products = await getPlants();
-
-  const productElements = await Promise.all(
-    products.map(async (product) => {
-      const images = await getPlantImages(product);
-
-      return (
-        <Dialog key={product.id}>
-          <DialogTrigger>
-            <ProductCard {...product} />
-          </DialogTrigger>
-          <ProductDialogContent product={product} images={images} />
-        </Dialog>
-      );
-    })
-  );
-
-  return <>{productElements}</>;
-}
-
 async function ArrangementsSuspense() {
   const products = await getArrangements();
 
@@ -156,12 +139,22 @@ async function ArrangementsSuspense() {
       const images = await getArrangementImages(product);
 
       return (
-        <Dialog key={product.id}>
-          <DialogTrigger>
-            <ProductCard {...product} />
-          </DialogTrigger>
-          <ProductDialogContent product={product} images={images} />
-        </Dialog>
+        <ProductDialog key={product.id} product={product} images={images} />
+      );
+    })
+  );
+
+  return <>{productElements}</>;
+}
+async function PlantsSuspense() {
+  const products = await getPlants();
+
+  const productElements = await Promise.all(
+    products.map(async (product) => {
+      const images = await getPlantImages(product);
+
+      return (
+        <ProductDialog key={product.id} product={product} images={images} />
       );
     })
   );

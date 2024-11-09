@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
 // Import your images
 import familyPhoto from "/public/family-photo.jpg"; // Make sure this image exists
-import shopPhoto from "/public/shop-photo.jpg";
+import shopPhoto from "/public/shop.jpg";
 import flowersPhoto from "/public/flowers-photo.jpg";
 
 export default function AboutUsPage() {
@@ -18,7 +18,7 @@ export default function AboutUsPage() {
 
   return (
     <div className="container mx-auto px-4 py-16">
-      <h1 className="text-5xl font-kuhlenbach text-center pb-4">About Us</h1>
+      <h1 className="text-5xl font-gotham tracking-wider text-gray-700 mb-12 text-center pb-4">About Us</h1>
       <p className="text-lg text-gray-700 mb-16 text-center max-w-2xl mx-auto">
         We're a family-owned small business catering to our local community.
         Providing the best blooms at honest prices is our passion and commitment.
@@ -55,7 +55,7 @@ export default function AboutUsPage() {
             </Dialog>
           </div>
           <div className="md:w-1/2 md:pl-12 mt-8 md:mt-0">
-            <h2 className="text-3xl font-kuhlenbach text-gray-900 mb-4">
+            <h2 className="text-3xl font-oSans text-gray-900 mb-4">
               Our Story
             </h2>
             <p className="text-gray-700 mb-4">
@@ -94,7 +94,7 @@ export default function AboutUsPage() {
             </Dialog>
           </div>
           <div className="md:w-1/2 md:pr-12 mt-8 md:mt-0">
-            <h2 className="text-3xl font-kuhlenbach text-gray-900 mb-4">
+            <h2 className="text-3xl font-oSans text-gray-900 mb-4">
               Our Commitment
             </h2>
             <p className="text-gray-700 mb-4">
@@ -133,7 +133,7 @@ export default function AboutUsPage() {
             </Dialog>
           </div>
           <div className="md:w-1/2 md:pl-12 mt-8 md:mt-0">
-            <h2 className="text-3xl font-kuhlenbach text-gray-900 mb-4">
+            <h2 className="text-3xl font-oSans text-gray-900 mb-4">
               Our Community
             </h2>
             <p className="text-gray-700 mb-4">

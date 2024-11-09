@@ -2,6 +2,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Grandiflora+One&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,100..900;1,100..900&display=swap');
+
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;1,300&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -81,10 +84,29 @@
   }
 }
 
+
 @font-face {
   font-family: 'Kuhlenbach';
   src: url(/fonts/Kuhlenbach-VG0yZ.ttf) format('truetype');
 }
+
+@font-face {
+  font-family: 'Gotham';
+  src: url('/fonts/gotham%20book.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face{
+  font-family:'OSans';
+  src:url('/fonts/OpenSans-VariableFont_wdth,wght.ttf') format('truetype');
+  font-optical-sizing: auto;
+  font-weight: 300;
+  font-style: normal;
+  font-variation-settings:
+    "wdth" 100;
+}
+
 
 .darkmode {
   --background-color: #000000;
@@ -136,4 +158,113 @@ input[type="number"] {
   .hideOnMobile {
     display: none;
   }
+}
+
+
+.my-carousel-dots button {
+  /* Remove default button styles */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+
+  /* Make the dots circles */
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+
+  /* Set the default dot color */
+  background-color: #ccc; /* Example color */
+}
+
+
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 2s forwards;
+}
+
+/* .fade-in {
+  opacity: 0;
+  animation: fadeIn 2s forwards;
+} */
+
+/* Ensure navbar starts with a black background */
+.navbar {
+  position: sticky;
+  top: 0;
+  background-color: black ;  /* Set initial background to black */
+  z-index: 50; /* Keep it on top */
+}
+
+/* Adjust the navbar background when sticky on scroll (optional if you need transparency) */
+.navbar.sticky {
+  background-color: rgba(0, 0, 0, 0.8); /* Slight transparency when scrolling */
+}
+
+
+.resizer {
+  display: inline-block;
+  width: 5px;
+  height: 100%;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transform: translateX(50%);
+  z-index: 1;
+  touch-action:none;
+}
+
+.resizer:hover,
+.resizer.isResizing {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+
+
+/* styles/globals.css */
+
+/* FullCalendar Customization */
+.fc .fc-toolbar-title {
+  @apply text-2xl font-oSans;
+}
+
+.fc .fc-button {
+  @apply bg-gray-600 text-white px-2 py-1 rounded-none hover:bg-gray-900 border-none;
+}
+
+/* .fc .fc-daygrid-event {
+  @apply bg-green-300 rounded px-1;
+} */
+
+/* .fc .fc-daygrid-day {
+  @apply border border-gray-200;
+} */
+
+.fc .fc-day-today {
+  @apply bg-yellow-100;
+}
+
+/* Additional Styling */
+.fc-event {
+  cursor: pointer;
+}
+
+.fc .fc-toolbar {
+  @apply mb-4;
+}
+
+
+.fc-event-title-container {
+  white-space: normal !important;
+  word-wrap: break-word !important;
 }

@@ -9,6 +9,8 @@ import { ArrowLeft, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+
+
 type CarouselApi = UseEmblaCarouselType[1]
 type UseCarouselParameters = Parameters<typeof useEmblaCarousel>
 type CarouselOptions = UseCarouselParameters[0]
@@ -252,6 +254,61 @@ const CarouselNext = React.forwardRef<
 })
 CarouselNext.displayName = "CarouselNext"
 
+const CarouselDots = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => {
+  const { api, canScrollPrev, canScrollNext } = useCarousel()
+  const [selectedIndex, setSelectedIndex] = React.useState(0)
+
+  React.useEffect(() => {
+    if (!api) {
+      return
+    }
+
+    api.on("select", () => {
+      setSelectedIndex(api.selectedScrollSnap())
+    })
+
+    return () => {
+      api?.off("select", () => {
+        setSelectedIndex(api.selectedScrollSnap())
+      })
+    }
+  }, [api])
+
+  const handleDotClick = React.useCallback(
+    (index: number) => {
+      api?.scrollTo(index)
+    },
+    [api]
+  )
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "flex gap-2 mt-4",
+        className
+      )}
+      {...props}
+    >
+      {Array.from({ length: api?.scrollSnapList().length || 0 }).map(
+        (_, index) => (
+          <Button
+            key={index}
+            variant={index === selectedIndex ? "default" : "outline"}
+            size="sm"
+            className="h-4 w-4 rounded-full"
+            onClick={() => handleDotClick(index)}
+          />
+        )
+      )}
+    </div>
+  )
+})
+CarouselDots.displayName = "CarouselDots"
+
 export {
   type CarouselApi,
   Carousel,
@@ -259,4 +316,5 @@ export {
   CarouselItem,
   CarouselPrevious,
   CarouselNext,
+  CarouselDots,
 }

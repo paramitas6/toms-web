@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "apis": [
+    {
+      "identifier": "helcimdevdocs",
+      "source": "@helcimdevdocs/v2.1#dfaxvm24v83tb",
+      "integrity": "sha512-LNEAdEsyiCQNGavxqfEn16Gt9rGD+OiJxkchx0Wtd47Ro7214HhVWcnVfRkx9EnFJaFB/QIhFRW1OzC4hOqZSw==",
+      "installerVersion": "6.1.2"
+    }
+  ]
+}

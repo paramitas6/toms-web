@@ -1,3 +1,5 @@
+// src/app/admin/products/_components/ProductForm.tsx
+
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,11 @@ interface ProductWithImages extends Product {
   images?: PrismaImage[];
 }
 
-export function ProductForm({ product }: { product?: ProductWithImages | null }) {
+export function ProductForm({
+  product,
+}: {
+  product?: ProductWithImages | null;
+}) {
   const [error, action] = useFormState(
     product == null ? addProduct : updateProduct.bind(null, product.id),
     {}
@@ -32,13 +38,12 @@ export function ProductForm({ product }: { product?: ProductWithImages | null })
     product?.priceInCents || 0
   );
 
-  // State for additional images
-  const [additionalImages, setAdditionalImages] = useState<
+  // State for existing and new images
+  const [existingImages, setExistingImages] = useState<PrismaImage[]>([]);
+  const [newImages, setNewImages] = useState<
     {
-      id?: string;
       file?: File | null;
       previewUrl?: string;
-      existing?: boolean;
     }[]
   >([]);
 
@@ -46,50 +51,43 @@ export function ProductForm({ product }: { product?: ProductWithImages | null })
 
   useEffect(() => {
     if (product?.images) {
-      setAdditionalImages(
-        product.images.map((img) => ({
-          id: img.id,
-          previewUrl: img.imagePath,
-          existing: true,
-        }))
-      );
+      setExistingImages(product.images);
     }
   }, [product]);
 
   const addImage = () => {
-    setAdditionalImages((prev) => [...prev, { file: null }]);
+    setNewImages((prev) => [...prev, { file: null }]);
   };
 
-  const removeImage = (index: number) => {
-    setAdditionalImages((prev) => {
-      const img = prev[index];
-      if (img.id) {
-        // Mark existing image for deletion
-        setDeletedImageIds((ids) => [...ids, img.id!]);
-      }
-      return prev.filter((_, i) => i !== index);
-    });
+  const removeExistingImage = (id: string) => {
+    setExistingImages((prev) => prev.filter((img) => img.id !== id));
+    setDeletedImageIds((ids) => [...ids, id]);
   };
 
-  const handleImageChange = (
+  const removeNewImage = (index: number) => {
+    setNewImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleNewImageChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     index: number
   ) => {
     const file = e.target.files?.[0];
     if (file) {
-      const newImages = [...additionalImages];
-      newImages[index] = {
-        ...newImages[index],
+      const newImageList = [...newImages];
+      newImageList[index] = {
         file,
         previewUrl: URL.createObjectURL(file),
-        existing: false,
       };
-      setAdditionalImages(newImages);
+      setNewImages(newImageList);
     }
   };
 
   return (
-    <form action={action} className="space-y-6 bg-white p-6 rounded-lg shadow-md">
+    <form
+      action={action}
+      className="space-y-6 bg-white p-6 rounded-lg shadow-md"
+    >
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="name">Name</Label>
@@ -190,9 +188,72 @@ export function ProductForm({ product }: { product?: ProductWithImages | null })
         )}
         {error.image && <div className="text-destructive">{error.image}</div>}
       </div>
-
       {/* Additional Images */}
       <div className="space-y-2">
+        <Label className="text-lg font-semibold">Additional Images</Label>
+
+        {/* Existing Images */}
+        {existingImages.map((img, index) => (
+          <div
+            key={`existing-${img.id}`}
+            className="flex items-center space-x-4"
+          >
+            {/* Hidden input to pass existing image IDs */}
+            <input type="hidden" name="existingImageIds[]" value={img.id} />
+            <div className="w-24 h-24 relative">
+              <Image
+                src={img.imagePath}
+                alt={`Image ${index + 1}`}
+                layout="fill"
+                objectFit="cover"
+                className="rounded-md"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => removeExistingImage(img.id)}
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+
+        {/* New Images */}
+        {newImages.map((img, index) => (
+          <div key={`new-${index}`} className="flex items-center space-x-4">
+            <Input
+              name="images[]"
+              type="file"
+              onChange={(e) => handleNewImageChange(e, index)}
+              accept="image/*"
+            />
+            {img.previewUrl && (
+              <div className="w-24 h-24 relative">
+                <Image
+                  src={img.previewUrl}
+                  alt={`New Image ${index + 1}`}
+                  layout="fill"
+                  objectFit="cover"
+                  className="rounded-md"
+                />
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => removeNewImage(index)}
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button type="button" onClick={addImage} variant="outline">
+          Add more pictures...
+        </Button>
+      </div>
+     
+      {/* <div className="space-y-2">
         <Label className="text-lg font-semibold">Additional Images</Label>
         {additionalImages.map((img, index) => (
           <div key={index} className="flex items-center space-x-4">
@@ -226,7 +287,7 @@ export function ProductForm({ product }: { product?: ProductWithImages | null })
         <Button type="button" onClick={addImage} variant="outline">
           Add more pictures...
         </Button>
-      </div>
+      </div> */}
 
       {/* Hidden input to pass deleted image IDs */}
       {deletedImageIds.map((id) => (

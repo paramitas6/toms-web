@@ -1,4 +1,5 @@
 
+import { Open_Sans } from "next/font/google";
 import type { Config } from "tailwindcss"
 import { fontFamily } from "tailwindcss/defaultTheme";
 
@@ -7,6 +8,7 @@ import { fontFamily } from "tailwindcss/defaultTheme";
 const config = {
   darkMode: ["class"],
   content: [
+    "./node_modules/mina-scheduler/**/*.{js,ts,jsx,tsx}",
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
     './app/**/*.{ts,tsx}',
@@ -28,6 +30,9 @@ const config = {
         montserrat: ['"Montserrat"', 'sans-serif'],
         jost:['"Jost"', 'sans-serif'],
         dmsans:["DM Sans", 'sans-serif'],
+        gotham: ['"Gotham"', 'sans-serif'],
+        openSans:['Open Sans', 'sans-serif'],
+        oSans:['oSans','sans-serif'],
         sans: ["var(--font-sans)", ...fontFamily.sans]
       },
       colors: {
@@ -36,6 +41,8 @@ const config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        darkGreen: '#064e3b', // Assuming you have a custom color
+        textGray: '#6b7280',  // Assuming you have a custom color
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

@@ -1,3 +1,5 @@
+// src\lib\deliveryFeeTypes.ts
+
 // Define allowed values for DeliveryFeeType
 export const DeliveryFeeTypes = {
     DISTANCE: "DISTANCE",

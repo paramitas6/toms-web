@@ -1,95 +1,57 @@
-import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
-import { Button } from "@/components/ui/button";
+import BgOverlay from "./_components/BgOveray"; // Import the BgOverlay component
+
 import db from "@/db/db";
 import { cache } from "@/lib/cache";
-import { Product } from "@prisma/client";
-import { ArrowRight } from "lucide-react";
-import Link from "next/link";
-import { Suspense } from "react";
-
 import Image from "next/image";
+import { Clock, MapPin, Phone, Mail } from "lucide-react"; // Import icons from lucide-react
 
-import homeimage from "/public/image3.webp";
+import React from "react";
+import EventsAndContact from "./_components/EventsAndContact";
 
-const getNewestProducts = cache(() => {
-  return db.product.findMany({
-    where: { isAvailableForPurchase: true },
-    orderBy: { createdAt: "desc" },
-    take: 6,
-  });
-}, ["/", "getNewestProducts"]);
+export default async function Home() {
+  // Fetch data server-side
+  const [homeSettings] = await Promise.all([getHomeSettings()]);
 
-// const getPopularProducts = cache(
-//   () => {
-//     return db.product.findMany({
-//       where: { isAvailableForPurchase: true },
-//       orderBy: { orders: { _count: "desc" } },
-//       take: 6,
-//     });
-//   },
-//   ["/", "getMostPopularProducts"],
-//   { revalidate: 60 * 60 }
-// );
+  const {
+    backgroundImage = "/background.jpg",
+    overlayText = "LET YOUR HEART BLOOM",
+  } = homeSettings || {};
+  const FeaturedProducts = React.lazy(
+    () => import("./_components/FeaturedProducts")
+  );
 
-//main homescreen
-export default function HomePage() {
   return (
-    <main className="space-y-4">
-      <div className="bg-blend-color-dodge bg-black  justify-center items-center">
-        <div className="flex flex-col items-center w-full">
-          <Image src={homeimage} width={3000} alt="home" />
+    <main className="overflow-x-hidden relative font-oSans">
+      {/* BgOverlay Section */}
+      <BgOverlay backgroundImage={backgroundImage} overlayText={overlayText} />
 
-          <h1>New arrivals</h1>
+      <div className="m-8">
+        <div className="text-center">
+          <h1 className="text-5xl font-oSans text-gray-700 m-4 tracking-wider">
+            Watch your loved ones smile
+          </h1>
+          <p className="text-lg font-montserrat text-gray-500 mb-8">
+            Give the finest flowers from our exquisite collection of flowers.
+          </p>
         </div>
       </div>
-      {/* <ProductGridSection title="Most popular" productsFetcher={getPopularProducts} />
-        <ProductGridSection title="Newest" productsFetcher={getNewestProducts} /> */}
+
+      {/* Featured Products Section */}
+      <FeaturedProducts />
+      {/* Events Section */}
+      <EventsAndContact />
     </main>
   );
 }
 
-type ProductGridSectionProps = {
-  title: string;
-  productsFetcher: () => Promise<Product[]>;
-};
-function ProductGridSection({
-  productsFetcher,
-  title,
-}: ProductGridSectionProps) {
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-4">
-        <h2 className="text-3xl font-bold">{title}</h2>
-        <Button variant="outline" asChild>
-          <Link href="/products" className="space-x-2">
-            <span>View all</span>
-            <ArrowRight className="size-4" />
-          </Link>
-        </Button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Suspense
-          fallback={
-            <>
-              <ProductCardSkeleton />
-              <ProductCardSkeleton />
-              <ProductCardSkeleton />
-            </>
-          }
-        >
-          <ProductSuspense productsFetcher={productsFetcher} />
-        </Suspense>
-      </div>
-    </div>
-  );
-}
+// Define server-side caching functions
 
-async function ProductSuspense({
-  productsFetcher,
-}: {
-  productsFetcher: () => Promise<Product[]>;
-}) {
-  return (await productsFetcher()).map((product) => (
-    <ProductCard key={product.id} {...product} />
-  ));
-}
+const getHomeSettings = cache(
+  async () => {
+    return db.homeSetting.findFirst({
+      orderBy: { createdAt: "desc" },
+    });
+  },
+  ["/home", "getHomeSettings"],
+  { revalidate: 20 }
+);
