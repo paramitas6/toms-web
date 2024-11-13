@@ -46,6 +46,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Optionally, automatically log the user in after signup
+    // const token = await signToken({ userId: user.id, email: user.email });
+    // const cookie = serialize('auth', token, { ... });
+
     return NextResponse.json({ message: 'User created successfully.' }, { status: 201 });
   } catch (error) {
     console.error('Signup error:', error);

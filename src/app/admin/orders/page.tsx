@@ -5,7 +5,16 @@ import { PageHeader } from "../_components/PageHeader";
 import Link from "next/link";
 import OrdersTable from "./_components/OrdersTable";
 import db from "@/db/db";
-import { Order } from "./types"; // Import the consolidated Order type
+import { Order as PrismaOrder, User, OrderItem, Product, Image } from "@prisma/client"; // Import the necessary types
+
+interface Order extends PrismaOrder {
+  user: User | null;
+  orderItems: (OrderItem & {
+    product: Product & {
+      images: Image[];
+    } | null;
+  })[];
+}
 
 export default async function AdminOrdersPage() {
   const orders: Order[] = await db.order.findMany({

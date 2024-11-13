@@ -4,7 +4,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import db from '@/db/db';
 
-const SECRET_KEY = new TextEncoder().encode(process.env.SECRET_KEY || 'your_secret_key');
+const secret = process.env.SECRET_KEY;
+
+if (!secret) {
+  throw new Error('SECRET_KEY environment variable is not set.');
+}
+
+const SECRET_KEY = new TextEncoder().encode(secret);
 
 export async function GET(request: NextRequest) {
   try {

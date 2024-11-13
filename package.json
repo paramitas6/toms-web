@@ -2,6 +2,7 @@
   "name": "toms",
   "version": "0.1.0",
   "private": true,
+  
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,6 +16,8 @@
     "@fullcalendar/list": "^6.1.15",
     "@fullcalendar/react": "^6.1.15",
     "@fullcalendar/timegrid": "^6.1.15",
+    "@node-escpos/core": "^0.6.0",
+    "@node-escpos/usb-adapter": "^0.3.1",
     "@pdf-lib/fontkit": "^1.1.1",
     "@prisma/client": "^5.15.0",
     "@radix-ui/react-checkbox": "^1.1.2",
@@ -39,6 +42,8 @@
     "embla-carousel-autoplay": "^8.3.0",
     "embla-carousel-fade": "^8.3.0",
     "embla-carousel-react": "^8.3.0",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-usb": "^3.0.0-alpha.4",
     "formidable": "^3.5.2",
     "jose": "^5.9.6",
     "jsonwebtoken": "^9.0.2",
@@ -55,11 +60,13 @@
     "swr": "^2.2.5",
     "tailwind-merge": "^2.2.2",
     "tailwindcss-animate": "^1.0.7",
+    "usb": "^2.14.0",
     "uuid": "^11.0.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
+    "@types/escpos": "^2.5.5",
     "@types/formidable": "^3.4.5",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20",

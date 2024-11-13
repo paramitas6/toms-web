@@ -30,7 +30,7 @@ const EnterpriseCalendar: React.FC = () => {
 
   const handleEventClick = (clickInfo: { event: EventApi }) => {
     // Navigate to order details page
-    router.push(`/orders/${clickInfo.event.id}`);
+    router.push(`/admin/orders/${clickInfo.event.id}`);
   };
 
   const eventContent = (eventInfo: { event: EventApi }) => {
@@ -74,7 +74,7 @@ const EnterpriseCalendar: React.FC = () => {
         headerToolbar={{
           left: "prev,next today",
           center: "title",
-          right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+          right: "dayGridMonth,listWeek",
         }}
         events={events}
         datesSet={handleDatesSet}

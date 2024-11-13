@@ -32,26 +32,29 @@ const UserPage = async () => {
   });
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Your Orders</h1>
+    <div className="container mx-auto p-4 font-montserrat">
+      <h1 className="text-5xl font-bold mb-4 font-gotham tracking-wider">Your Orders</h1>
       {orders.length === 0 ? (
         <p>You have no past orders.</p>
       ) : (
         <div className="space-y-4">
           {orders.map(order => (
             <div key={order.id} className="border p-4 rounded">
-              <h2 className="text-xl font-semibold">Order #{order.id}</h2>
+              {/* <h2 className="text-xl font-semibold">Order #{order.id}</h2> */}
+              <h2 className="text-xl font-semibold">Order placed on {new Date(order.createdAt).toLocaleDateString()}</h2>
               <p>Status: {order.status}</p>
-              <p>Total Paid: ${(order.pricePaidInCents / 100).toFixed(2)}</p>
-              <p>Created At: {new Date(order.createdAt).toLocaleString()}</p>
+         
+
               <h3 className="mt-2 font-semibold">Items:</h3>
               <ul className="list-disc list-inside">
                 {order.orderItems.map(item => (
                   <li key={item.id}>
-                    {item.description} - Quantity: {item.quantity} - Price: ${(item.priceInCents / 100).toFixed(2)} - Subtotal: ${(item.subtotalInCents / 100).toFixed(2)}
+                    {item.description} - Quantity: {item.quantity} - Subtotal: ${(item.subtotalInCents / 100).toFixed(2)}
                   </li>
                 ))}
               </ul>
+              
+              <p>Total Amount Paid: ${(order.pricePaidInCents / 100).toFixed(2)}</p>
               {/* Add more order details as needed */}
             </div>
           ))}

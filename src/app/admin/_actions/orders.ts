@@ -5,8 +5,22 @@ import db from "@/db/db";
 import { z } from "zod";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuid } from "uuid";
 import { User, Order } from "@prisma/client";
+
+import crypto from "crypto";
+
+async function generateRandomInvoiceNumber(
+  orderId: string,
+  createdAt: Date
+): Promise<string> {
+  const input = `${orderId}-${createdAt.getTime()}`;
+  const hash = crypto.createHash("sha256").update(input).digest("hex");
+  const hashInteger = parseInt(hash.slice(0, 9), 16);
+  return Number(hashInteger % 1e9)
+    .toString()
+    .padStart(9, "0");
+}
 
 const orderItemSchema = z.object({
   productId: z.string().uuid().optional(),
@@ -23,6 +37,7 @@ const addOrderSchema = z.object({
   isDelivery: z.coerce.boolean(),
   status: z.string().min(1),
   recipientName: z.string().optional(),
+  recipientPhone: z.string().optional(),
   deliveryAddress: z.string().optional(),
   deliveryInstructions: z.string().optional(),
   postalCode: z.string().optional(),
@@ -31,7 +46,6 @@ const addOrderSchema = z.object({
   deliveryTime: z.string().optional(),
   orderItems: z.array(orderItemSchema),
 });
-
 
 /**
  * Capture Transaction and Update Order
@@ -43,7 +57,6 @@ const captureTransactionSchema = z.object({
   amount: z.number().positive(),
 });
 
-
 export async function captureTransaction(orderId: string) {
   const ipAddress = "192.168.1.1";
   const apiToken = process.env.HELCIM_API_TOKEN;
@@ -54,7 +67,12 @@ export async function captureTransaction(orderId: string) {
       where: { id: orderId },
     });
 
-    if (!order || !order.transactionId || !order.idempotencyKey||!order.pricePaidInCents) {
+    if (
+      !order ||
+      !order.transactionId ||
+      !order.idempotencyKey ||
+      !order.pricePaidInCents
+    ) {
       throw new Error("Order not found or transactionId/amount missing.");
     }
 
@@ -86,7 +104,9 @@ export async function captureTransaction(orderId: string) {
           idempotencyKey,
         },
       });
-      console.log(`Transaction captured successfully) ${JSON.stringify(result)}`);
+      console.log(
+        `Transaction captured successfully) ${JSON.stringify(result)}`
+      );
     } else {
       throw new Error(`Transaction capture failed: ${JSON.stringify(result)}`);
     }
@@ -95,8 +115,6 @@ export async function captureTransaction(orderId: string) {
     throw new Error("Transaction capture failed.");
   }
 }
-
-
 
 export async function addOrder(prevState: unknown, formData: FormData) {
   const entries = Object.fromEntries(formData.entries());
@@ -147,10 +165,12 @@ export async function addOrder(prevState: unknown, formData: FormData) {
     deliveryDate,
     deliveryTime,
     orderItems: orderItemsData,
+    recipientPhone: recipientPhone,
   } = result.data;
 
   // Calculate total price
   let pricePaidInCents = 0;
+
   const orderItemsToCreate = [];
   for (const itemData of orderItemsData) {
     if (itemData.productId) {
@@ -158,7 +178,9 @@ export async function addOrder(prevState: unknown, formData: FormData) {
         where: { id: itemData.productId },
       });
       if (!product) {
-        console.warn(`Product with ID ${itemData.productId} not found. Skipping.`);
+        console.warn(
+          `Product with ID ${itemData.productId} not found. Skipping.`
+        );
         continue; // Skip invalid products
       }
 
@@ -181,7 +203,6 @@ export async function addOrder(prevState: unknown, formData: FormData) {
 
       const subtotalInCents = itemData.priceInCents * itemData.quantity;
       pricePaidInCents += subtotalInCents;
-
       orderItemsToCreate.push({
         productId: null,
         quantity: itemData.quantity,
@@ -192,14 +213,15 @@ export async function addOrder(prevState: unknown, formData: FormData) {
       });
     }
   }
-
+  pricePaidInCents = pricePaidInCents * 1.13; // Add 13% tax
   // Create the order
-  await db.order.create({
+  const newOrder = await db.order.create({
     data: {
       userId,
       pricePaidInCents,
       isDelivery,
       recipientName,
+      recipientPhone,
       deliveryAddress,
       deliveryInstructions,
       postalCode,
@@ -213,9 +235,22 @@ export async function addOrder(prevState: unknown, formData: FormData) {
     },
   });
 
+  // Step 2: Generate the invoice number
+  const invoiceNumber = await generateRandomInvoiceNumber(
+    newOrder.id,
+    newOrder.createdAt
+  );
+
+  // Step 3: Update the order with the generated invoice number
+  const updatedOrder = await db.order.update({
+    where: { id: newOrder.id },
+    data: { invoiceNumber },
+  });
+
   // Revalidate and redirect
   revalidatePath("/admin/orders");
   redirect("/admin/orders");
+  return updatedOrder;
 }
 
 const editOrderSchema = addOrderSchema;
@@ -282,7 +317,9 @@ export async function updateOrder(
         where: { id: itemData.productId },
       });
       if (!product) {
-        console.warn(`Product with ID ${itemData.productId} not found. Skipping.`);
+        console.warn(
+          `Product with ID ${itemData.productId} not found. Skipping.`
+        );
         continue; // Skip invalid products
       }
 
@@ -387,13 +424,12 @@ export async function changeOrderStatus(id: string, newStatus: string) {
   redirect("/admin/orders");
 }
 
-
 export async function fetchOrder(id: string) {
   const order = await db.order.findUnique({
     where: { id },
     include: {
       orderItems: {
-        include: { product: true, }, // Include related product details
+        include: { product: true }, // Include related product details
       },
     },
   });
@@ -405,21 +441,18 @@ export async function fetchOrder(id: string) {
   return order;
 }
 
-
-
 export async function fetchTransactionStatus(orderId: string) {
   const order = await db.order.findUnique({
     where: { id: orderId },
-    select: { transactionStatus: true },
+    select: { transactionStatus: true, isDelivery: true },
   });
 
   if (!order) {
     throw new Error("Order not found.");
   }
 
-  return order.transactionStatus;
+  return order;
 }
-
 
 export async function fetchUsers(): Promise<User[]> {
   return await db.user.findMany({

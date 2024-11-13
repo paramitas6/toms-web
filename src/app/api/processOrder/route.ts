@@ -5,6 +5,7 @@ import db from '@/db/db';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { jwtVerify } from 'jose'; // Ensure you have 'jose' installed
+import generateInvoiceNumber from '@/lib/generateInvoiceNumber';
 
 const SECRET_KEY = new TextEncoder().encode(process.env.SECRET_KEY || 'your_secret_key');
 
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
         deliveryTime: selectedTime,
         transactionId: transactionId,
         idempotencyKey,
+        invoiceNumber:  (await generateInvoiceNumber(uuidv4(), new Date())).toString(),
         deliveryFeeInCents: Math.round(deliveryFee * 100),
         status: "payment pending",
         guestEmail: isGuest ? (guestEmail || '') : null, // Only set if guest

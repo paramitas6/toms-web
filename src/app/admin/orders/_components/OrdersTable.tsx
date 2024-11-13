@@ -9,7 +9,6 @@ import {
   SortingState,
   VisibilityState,
   flexRender,
-
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
@@ -42,10 +41,20 @@ import {
   DeleteOrderDropdownItem,
   StatusDropdownItem,
   CaptureTransactionDropdownItem,
-  GenerateInvoiceDropdownItem
-} from "../_components/OrderActions"
+  GenerateInvoiceDropdownItem,
+  PrintDeliveryDropdownItem,
+  PrintReceiptDropdownItem,
+} from "../_components/OrderActions";
 
-import { Order } from "../types";
+import { Order as PrismaOrder, OrderItem } from "@prisma/client";
+
+interface Order extends PrismaOrder {
+  orderItems: OrderItem[];
+  user: {
+    name: string;
+    email: string;
+  } | null;
+}
 
 interface OrdersTableProps {
   orders: Order[];
@@ -89,12 +98,9 @@ const getStatusStyles = (status: string): string => {
   }
 };
 
-
-
 export const columns: ColumnDef<OrderData>[] = [
   // Removed the selection column
 
-  
   {
     accessorKey: "createdAt",
     header: ({ column }) => (
@@ -122,7 +128,6 @@ export const columns: ColumnDef<OrderData>[] = [
         className="w-full text-left"
       >
         Customer
- 
       </Button>
     ),
     cell: ({ row }) => <span>{row.original.customer}</span>,
@@ -139,7 +144,6 @@ export const columns: ColumnDef<OrderData>[] = [
         className="w-full text-left"
       >
         Items
-
       </Button>
     ),
     cell: ({ row }) => (
@@ -156,7 +160,7 @@ export const columns: ColumnDef<OrderData>[] = [
         ))}
       </ul>
     ),
-    size:200, // Set smaller size
+    size: 200, // Set smaller size
     minSize: 150,
     maxSize: 250,
   },
@@ -169,7 +173,6 @@ export const columns: ColumnDef<OrderData>[] = [
         className="w-full text-right"
       >
         Price
-
       </Button>
     ),
     cell: ({ row }) => (
@@ -188,7 +191,6 @@ export const columns: ColumnDef<OrderData>[] = [
         className="w-full text-left"
       >
         Status
-
       </Button>
     ),
     cell: ({ row }) => (
@@ -271,14 +273,21 @@ export const columns: ColumnDef<OrderData>[] = [
             <DropdownMenuItem asChild>
               <Link href={`/admin/orders/${orderId}/edit`}>Edit</Link>
             </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-            <StatusDropdownItem id={orderId} currentStatus={row.original.status as "payment pending" | "in progress" | "ready to be picked up" | "picked up"} />
-            <DeleteOrderDropdownItem id={orderId} />
-            <CaptureTransactionDropdownItem
-              orderId={orderId}
-            />
             <GenerateInvoiceDropdownItem order={row.original.originalOrder} />
+            <DeleteOrderDropdownItem id={orderId} />
+            <DropdownMenuSeparator />
+            <StatusDropdownItem
+              id={orderId}
+              currentStatus={
+                row.original.status as
+                  | "payment pending"
+                  | "in progress"
+                  | "ready to be picked up"
+                  | "picked up"
+              }
+            />
+
+            <CaptureTransactionDropdownItem orderId={orderId} />
           </DropdownMenuContent>
         </DropdownMenu>
       );
@@ -311,10 +320,8 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
         .map(
           (item) =>
             `${item.quantity} x ${
-              item.product
-                ? item.product.name ||
-                  item.product.description ||
-                  "Unnamed Product"
+              item.productId
+                ? `Product ID: ${item.productId}`
                 : item.description || "Custom Item"
             }`
         )
@@ -324,9 +331,10 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
       deliveryOption: order.isDelivery ? "Delivery" : "Pick Up",
       isDelivery: order.isDelivery ?? false,
       originalOrder: order,
-      deliverySchedule: order.deliveryDate && order.deliveryTime
-        ? `${formatDate(new Date(order.deliveryDate))} ${order.deliveryTime}`
-        : "N/A",
+      deliverySchedule:
+        order.deliveryDate && order.deliveryTime
+          ? `${formatDate(new Date(order.deliveryDate))} ${order.deliveryTime}`
+          : "N/A",
       deliveryAddress: order.deliveryAddress || null, // Ensure it's string | null | undefined
       orderItems: order.orderItems,
     }));
@@ -351,10 +359,10 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
       globalFilter,
       columnVisibility,
     },
-    globalFilterFn: 'includesString', // Use built-in includesString filter function
+    globalFilterFn: "includesString", // Use built-in includesString filter function
     onGlobalFilterChange: setGlobalFilter, // Handle global filter changes
     enableGlobalFilter: true, // Enable global filtering
-    columnResizeMode: 'onChange', // Optional: Change to 'onChange' for immediate resizing
+    columnResizeMode: "onChange", // Optional: Change to 'onChange' for immediate resizing
   });
 
   return (
@@ -404,9 +412,7 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
                     <TableHead
                       key={header.id}
                       className={
-                        isActionsColumn
-                          ? "sticky right-0 bg-white z-10"
-                          : ""
+                        isActionsColumn ? "sticky right-0 bg-white z-10" : ""
                       }
                       style={{
                         width: header.getSize(),
@@ -414,27 +420,27 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
                         maxWidth: header.column.columnDef.maxSize,
                       }}
                     >
-                      {header.isPlaceholder
-                        ? null
-                        : (
-                          <div className="flex items-center">
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                            {header.column.getCanResize() && (
-                              <div
-                                {...{
-                                  onMouseDown: header.getResizeHandler(),
-                                  onTouchStart: header.getResizeHandler(),
-                                  className: `resizer ${
-                                    header.column.getIsResizing() ? "isResizing" : ""
-                                  }`,
-                                }}
-                              />
-                            )}
-                          </div>
-                        )}
+                      {header.isPlaceholder ? null : (
+                        <div className="flex items-center">
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          {header.column.getCanResize() && (
+                            <div
+                              {...{
+                                onMouseDown: header.getResizeHandler(),
+                                onTouchStart: header.getResizeHandler(),
+                                className: `resizer ${
+                                  header.column.getIsResizing()
+                                    ? "isResizing"
+                                    : ""
+                                }`,
+                              }}
+                            />
+                          )}
+                        </div>
+                      )}
                     </TableHead>
                   );
                 })}
@@ -454,9 +460,7 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
                       <TableCell
                         key={cell.id}
                         className={
-                          isActionsColumn
-                            ? "sticky right-0 bg-white z-10"
-                            : ""
+                          isActionsColumn ? "sticky right-0 bg-white z-10" : ""
                         }
                         style={{
                           width: cell.column.getSize(),

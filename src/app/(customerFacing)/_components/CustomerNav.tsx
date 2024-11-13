@@ -1,3 +1,5 @@
+// src/components/CustomerNav.tsx
+
 "use client";
 
 import Link from "next/link";
@@ -5,15 +7,38 @@ import Image from "next/image";
 import { ShoppingBag, User } from "lucide-react";
 import logo from "/public/tomslogo.png";
 import { Nav, NavLink } from "../../../components/Nav";
-import { useContext, useState } from "react";
+import { useContext, useState, useEffect, useRef } from "react";
 import CartContext from "@/app/(customerFacing)/_components/CartComponent"; // Adjust the path
+import { UserContext } from "@/contexts/UserContext"; // Adjust the path
 
-export default function CustomerNav() {
+const CustomerNav: React.FC = () => {
   const { cart } = useContext(CartContext);
   const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // User Context
+  const { user, logout } = useContext(UserContext);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
   const toggleMenu = () => setMenuOpen(!menuOpen);
+  const toggleUserMenu = () => setUserMenuOpen(!userMenuOpen);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   return (
     <>
@@ -46,7 +71,11 @@ export default function CustomerNav() {
                   strokeWidth="2"
                   className="w-6 h-6"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
                 </svg>
               </div>
             </button>
@@ -55,17 +84,58 @@ export default function CustomerNav() {
           {/* Navigation Links */}
           <div className="hidden sm:flex w-full justify-end text-white">
             <Nav className="space-x-4" direction="row" lightmode={false}>
-              <NavLink className="font-gotham" href="/shop">Shop</NavLink>
+              <NavLink className="font-gotham" href="/shop">
+                Shop
+              </NavLink>
               <NavLink href="/services">Services</NavLink>
               <NavLink href="/about">About</NavLink>
             </Nav>
           </div>
 
           {/* Cart and User Icons */}
-          <div className="hidden sm:flex items-center space-x-3 px-20">
-          <Link href="/user">
-            <User color="white" />
-            </Link>
+          <div className="hidden sm:flex items-center space-x-3 px-20 relative">
+            {user ? (
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={toggleUserMenu}
+                  className="flex items-center focus:outline-none"
+                  aria-label="User menu"
+                >
+                  <User color="white" />
+                </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white text-black rounded-md shadow-lg py-1 z-20">
+                    <Link
+                      href="/account-settings"
+                      className="block px-4 py-2 text-sm hover:bg-gray-100"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      Account Settings
+                    </Link>
+                    <Link
+                      href="/orders"
+                      className="block px-4 py-2 text-sm hover:bg-gray-100"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      View Orders
+                    </Link>
+                    <button
+                      onClick={async () => {
+                        await logout();
+                        setUserMenuOpen(false);
+                      }}
+                      className="w-full text-left block px-4 py-2 text-sm hover:bg-gray-100"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link href="/login">
+                <User color="white" />
+              </Link>
+            )}
             <Link href="/cart">
               <div className="relative">
                 <ShoppingBag color="white" />
@@ -86,7 +156,11 @@ export default function CustomerNav() {
           menuOpen ? "translate-x-0" : "translate-x-full"
         } z-50 flex flex-col pl-4 pt-20`}
       >
-        <button onClick={toggleMenu} className="absolute top-4 right-4" aria-label="Close menu">
+        <button
+          onClick={toggleMenu}
+          className="absolute top-4 right-4"
+          aria-label="Close menu"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
@@ -95,7 +169,11 @@ export default function CustomerNav() {
             strokeWidth="2"
             className="w-6 h-6"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
 
@@ -108,7 +186,33 @@ export default function CustomerNav() {
         <NavLink href="/about" onClick={toggleMenu}>
           About
         </NavLink>
+        {user && (
+          <>
+            <NavLink href="/account-settings" onClick={toggleMenu}>
+              Account Settings
+            </NavLink>
+            <NavLink href="/orders" onClick={toggleMenu}>
+              View Orders
+            </NavLink>
+            <button
+              onClick={async () => {
+                await logout();
+                toggleMenu();
+              }}
+              className="text-left px-4 py-2 text-sm hover:bg-gray-700"
+            >
+              Logout
+            </button>
+          </>
+        )}
+        {!user && (
+          <NavLink href="/user" onClick={toggleMenu}>
+            Login / Sign Up
+          </NavLink>
+        )}
       </div>
     </>
   );
-}
+};
+
+export default CustomerNav;

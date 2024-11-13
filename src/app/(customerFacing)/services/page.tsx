@@ -164,7 +164,7 @@ export default function ServicesPage() {
                 >
                   {openSections[service.id] && (
                     <div className="pt-4">
-                      <h3 className="text-xl font-oSans text-gray-900 mb-4 text-white">
+                      <h3 className="text-xl font-oSans  mb-4 text-white">
                         More about {service.title}
                       </h3>
                       <p className="text-gray-700 mb-4">

@@ -225,7 +225,7 @@ const OrderConfirmationPage = () => {
       </div>
       <div className="flex justify-center mt-8">
         <Link href="/shop">
-          <button className="bg-blue-600 text-white text-xl py-3 px-8 rounded-lg hover:bg-blue-700 transition duration-300">
+          <button className=" hover:bg-red-100 text-red-300 text-xl py-3 px-8 rounded-lg transition duration-300">
             Back to Shop
           </button>
         </Link>

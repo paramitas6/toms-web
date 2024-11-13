@@ -1,6 +1,6 @@
 // src/app/(customerFacing)/checkout/page.tsx
 
-'use client';
+"use client";
 
 import React, { useContext, useState, useEffect, useCallback } from "react";
 import CartContext from "@/app/(customerFacing)/_components/CartComponent";
@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Phone } from "lucide-react";
 
 declare global {
   function appendHelcimPayIframe(checkoutToken: string): void;
@@ -31,23 +32,19 @@ declare global {
 
 const schema = z.object({
   isGuest: z.boolean(),
-  guestEmail: z.union([z.string().email(), z.literal(''), z.null()]).optional(),
+  guestEmail: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
   deliveryOption: z.enum(["pickup", "delivery"]),
   recipientName: z.string().optional(),
+  recipientPhone: z.string().optional(),
   deliveryAddress: z.string().optional(),
   deliveryInstructions: z.string().optional(),
   postalCode: z.string().optional(),
   selectedDate: z.string().min(1, "Delivery date is required."),
   selectedTime: z.string().min(1, "Delivery time is required."),
+  phone: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
-
-interface User {
-  email: string;
-  name: string;
-  phone?: string;
-}
 
 const CheckoutPage = () => {
   const { cart, clearCart } = useContext(CartContext);
@@ -167,7 +164,10 @@ const CheckoutPage = () => {
     }
   };
 
-  const handlePaymentSuccess = async (transaction: any, transactionId: string) => {
+  const handlePaymentSuccess = async (
+    transaction: any,
+    transactionId: string
+  ) => {
     await processOrder(transaction, transactionId);
   };
 
@@ -330,14 +330,53 @@ const CheckoutPage = () => {
           </h1>
 
           {!formData.isGuest && (
-            <div className="mb-4 p-4 bg-green-100 text-green-800 rounded">
+            <div className="mb-4 p-4 bg-slate-50 rounded">
               <p>
-                You are logged in as <strong>{formData.guestEmail}</strong>. Your
-                email will be used for this checkout.
+                You are logged in as <strong>{formData.guestEmail}</strong>.
+                Your email will be used for this checkout.
               </p>
             </div>
           )}
-
+          <DeliveryOptions
+            deliveryOption={formData.deliveryOption}
+            setDeliveryOption={(option: string) => {
+              if (option === "pickup" || option === "delivery") {
+                setFormData((prev) => ({
+                  ...prev,
+                  deliveryOption: option,
+                }));
+              }
+            }}
+            recipientName={formData.recipientName || ""}
+            setRecipientName={(value) =>
+              setFormData((prev) => ({ ...prev, recipientName: value }))
+            }
+            recipientPhone={formData.recipientPhone || ""}
+            setRecipientPhone={(value) =>
+              setFormData((prev) => ({ ...prev, recipientPhone: value }))
+            }
+            deliveryAddress={formData.deliveryAddress || ""}
+            setDeliveryAddress={(value) =>
+              setFormData((prev) => ({ ...prev, deliveryAddress: value }))
+            }
+            deliveryInstructions={formData.deliveryInstructions || ""}
+            setDeliveryInstructions={(value) =>
+              setFormData((prev) => ({
+                ...prev,
+                deliveryInstructions: value,
+              }))
+            }
+            postalCode={formData.postalCode || ""}
+            setPostalCode={(value) =>
+              setFormData((prev) => ({ ...prev, postalCode: value }))
+            }
+            deliveryFeeError={deliveryFeeError}
+            setDeliveryFeeError={setDeliveryFeeError}
+            loadingDeliveryFee={loadingDeliveryFee}
+            setLoadingDeliveryFee={setLoadingDeliveryFee}
+            deliveryFee={deliveryFee}
+            setDeliveryFee={setDeliveryFee}
+          />
           <div className="flex mx-auto gap-4 font-montserrat">
             <div className="flex flex-col w-1/4">
               <GuestCheckout
@@ -391,44 +430,22 @@ const CheckoutPage = () => {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="mb-4">
+                  <Label htmlFor="selectedTime">Your Contact Number</Label>
+                  <Input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone || ""}
+                    onChange={handleChange}
+                    required
+                    className="mt-1 block w-full"
+                  />
+                </div>
               </div>
-              <DeliveryOptions
-                deliveryOption={formData.deliveryOption}
-                setDeliveryOption={(option: string) => {
-                  if (option === "pickup" || option === "delivery") {
-                    setFormData((prev) => ({
-                      ...prev,
-                      deliveryOption: option,
-                    }));
-                  }
-                }}
-                recipientName={formData.recipientName || ""}
-                setRecipientName={(value) =>
-                  setFormData((prev) => ({ ...prev, recipientName: value }))
-                }
-                deliveryAddress={formData.deliveryAddress || ""}
-                setDeliveryAddress={(value) =>
-                  setFormData((prev) => ({ ...prev, deliveryAddress: value }))
-                }
-                deliveryInstructions={formData.deliveryInstructions || ""}
-                setDeliveryInstructions={(value) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    deliveryInstructions: value,
-                  }))
-                }
-                postalCode={formData.postalCode || ""}
-                setPostalCode={(value) =>
-                  setFormData((prev) => ({ ...prev, postalCode: value }))
-                }
-                deliveryFeeError={deliveryFeeError}
-                setDeliveryFeeError={setDeliveryFeeError}
-                loadingDeliveryFee={loadingDeliveryFee}
-                setLoadingDeliveryFee={setLoadingDeliveryFee}
-                deliveryFee={deliveryFee}
-                setDeliveryFee={setDeliveryFee}
-              />
             </div>
+
             <div className="flex flex-col w-full">
               {cart.items.length > 0 ? (
                 <div className="flex flex-col lg:flex-row lg:space-x-8">
@@ -452,7 +469,7 @@ const CheckoutPage = () => {
               ) : (
                 <div className="text-center text-black mt-8">
                   <Link href="/shop">
-                    <Button className="mt-4 bg-red-500 text-white py-3 px-6 rounded hover:bg-red-600">
+                    <Button className="mt-4 border-none bg-white text-black-800 hover:bg-red-200">
                       Go Back to Shop
                     </Button>
                   </Link>
@@ -481,6 +498,7 @@ const CheckoutPage = () => {
           />
 
           <div className="mt-6">
+            <p className="text-center p-3 text-red-500">*Please note the you will not be charged at this time. Your order will be confirmed by our florist to ensure the freshest blooms before the transaction is processed.</p>
             <Button
               className="w-full bg-black text-white py-3 hover:bg-gray-800 font-oSans text-lg"
               type="button"
@@ -492,6 +510,7 @@ const CheckoutPage = () => {
                 (formData.deliveryOption === "delivery" &&
                   (!formData.postalCode ||
                     !formData.recipientName ||
+                    !formData.recipientPhone ||
                     !formData.deliveryAddress ||
                     !!deliveryFeeError ||
                     loadingDeliveryFee ||

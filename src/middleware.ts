@@ -1,3 +1,6 @@
+// src/middleware.ts
+
+
 import { NextRequest, NextResponse } from "next/server";
 import { isValidPassword } from "./lib/isValidPassoword";
 import { verifyToken, getTokenFromRequest } from './lib/auth';

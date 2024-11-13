@@ -54,7 +54,12 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
   );
   const [notes, setNotes] = useState<string>(order?.notes || "");
   const [postalCode, setPostalCode] = useState<string>(order?.postalCode || "");
-  const [recipientPhone, setRecipientPhone] = useState<string>(order?.recipientPhone || "");
+  const [recipientPhone, setRecipientPhone] = useState<string>(
+    order?.recipientPhone || ""
+  );
+  const [recipientName, setRecipientName] = useState<string>(
+    order?.recipientName || ""
+  );
   const [deliveryAddress, setDeliveryAddress] = useState<string>(
     order?.deliveryAddress || ""
   );
@@ -168,6 +173,7 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
 
     // Set pricePaidInCents
     formData.set("pricePaidInCents", totalPriceInCents.toString());
+    console.log(totalPriceInCents);
 
     // Convert isDelivery to a boolean string
     formData.set("isDelivery", isDelivery ? "true" : "false");
@@ -176,6 +182,13 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
       formData.set("userId", userId);
     } else {
       formData.delete("userId");
+    }
+
+    // Set recipientName
+    if (isDelivery) {
+      formData.set("recipientName", recipientName);
+    } else {
+      formData.delete("recipientName");
     }
 
     try {
@@ -383,13 +396,36 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
           {isDelivery && (
             <>
               <div className="space-y-2 flex-1">
-                <Label htmlFor="postalCode">Phone Number</Label>
+                <Label htmlFor="recipientName">Recipient Name</Label>
+                <Input
+                  type="text"
+                  id="recipientName"
+                  name="recipientName"
+                  value={recipientName}
+                  onChange={(e) => setRecipientName(e.target.value)}
+                  required={isDelivery}
+                />
+              </div>
+
+              <div className="space-y-2 flex-1">
+                <Label htmlFor="recipientPhone">Recipient Phone</Label>
                 <Input
                   type="tel"
-                  id="phone"
-                  name="phone"
-                  value={postalCode}
-                  onChange={(e) => setPostalCode(e.target.value)}
+                  id="recipientPhone"
+                  name="recipientPhone"
+                  value={recipientPhone}
+                  onChange={(e) => setRecipientPhone(e.target.value)}
+                  required={isDelivery}
+                />
+              </div>
+
+              <div className="space-y-2 flex-1">
+                <Label htmlFor="deliveryAddress">Street Address</Label>
+                <Input
+                  id="deliveryAddress"
+                  name="deliveryAddress"
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
                   required={isDelivery}
                 />
               </div>
@@ -407,19 +443,8 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
               </div>
 
               <div className="space-y-2 flex-1">
-                <Label htmlFor="deliveryAddress">Street Address</Label>
-                <Input
-                  id="deliveryAddress"
-                  name="deliveryAddress"
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  required={isDelivery}
-                />
-              </div>
-
-              <div className="space-y-2 flex-1">
                 <Label htmlFor="deliveryInstructions">
-                  Delivery Instructions
+                  Buzzer Code / Instructions
                 </Label>
 
                 <Textarea
@@ -477,11 +502,10 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
         </div>
       </div>
 
-      {/* Error Messages */}
       {error && (
         <div className="text-red-500">
           {Object.entries(error).map(([field, messages]) =>
-            messages ? (
+            messages && Array.isArray(messages) ? (
               <div key={field}>
                 <strong>{field}:</strong> {messages.join(", ")}
               </div>

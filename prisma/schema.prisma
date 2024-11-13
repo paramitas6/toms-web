@@ -8,28 +8,28 @@ generator client {
 }
 
 model Product {
-  id                      String            @id @default(uuid())
-  name                    String
-  description             String
-  careguide               String
-  category                String
-  priceInCents            Int
-  imagePath               String
-  isAvailableForPurchase  Boolean           @default(true)
-  stock                   Int               @default(0) // Default stock set to 0
-  createdAt               DateTime          @default(now())
-  updatedAt               DateTime          @updatedAt
-  images                  Image[]
-  orderItems              OrderItem[]
-  featuredProducts        FeaturedProduct[] // Updated relation name to match new model name
+  id                     String            @id @default(uuid())
+  name                   String
+  description            String
+  careguide              String
+  category               String
+  priceInCents           Int
+  imagePath              String
+  isAvailableForPurchase Boolean           @default(true)
+  stock                  Int               @default(0) // Default stock set to 0
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  images                 Image[]
+  orderItems             OrderItem[]
+  featuredProducts       FeaturedProduct[] // Updated relation name to match new model name
 }
 
 model FeaturedProduct {
-  id           String    @id @default(uuid())
-  productId    String
-  product      Product   @relation(fields: [productId], references: [id])
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(uuid())
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   featuredUntil DateTime? // Optional field to track when a product should stop being featured
 
   @@index([productId]) // Index on productId for faster querying
@@ -39,7 +39,7 @@ model Image {
   id        String   @id @default(uuid())
   imagePath String
   productId String
-  usedFor    String?
+  usedFor   String?
   product   Product  @relation(fields: [productId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -58,53 +58,55 @@ model User {
 }
 
 model Order {
-  id               String    @id @default(uuid())
+  id               String   @id @default(uuid())
+  invoiceNumber    String?   @unique
   pricePaidInCents Int
-  category       String?
+  taxInCents       Int?
+  category         String?
   userId           String?
-  user             User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  isDelivery       Boolean?  @default(false)
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   guestEmail       String?
-  recipientName    String?
-  recipientPhone   String?
-  deliveryAddress  String?
+  guestName        String?
+  isDelivery       Boolean? @default(false)
+  recipientName        String?
+  recipientPhone       String?
+  deliveryAddress      String?
   deliveryInstructions String?
-  deliveryFeeInCents Int?
-  postalCode       String?
-  transactionId    String?
-  transactionStatus String?
-  idempotencyKey String? 
-  notes            String?  // Store additional notes
-  deliveryDate     DateTime? // Store selected delivery date
-  deliveryTime     String?   // Store selected time window
-  status           String    @default("CART") // Status indicating an active cart
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  orderItems       OrderItem[]
+  deliveryFeeInCents   Int?
+  postalCode           String?
+  transactionId        String?
+  transactionStatus    String?
+  idempotencyKey       String?
+  notes                String? // Store additional notes
+  deliveryDate         DateTime? // Store selected delivery date
+  deliveryTime         String? // Store selected time window
+  status               String           @default("CART") // Status indicating an active cart
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  orderItems           OrderItem[]
+  deliveryDetails      DeliveryDetails?
 }
 
-model OrderItem {
-  id                 String   @id @default(uuid())
-  orderId            String
-  productId          String?
-  description        String?
-  type               String?  // "product" or "custom"
-  priceInCents       Int
-  quantity           Int
-  subtotalInCents    Int
-  cardMessage        String?  // Store personalized card message
-  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product            Product?  @relation(fields: [productId], references: [id], onDelete: Restrict)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+model DeliveryDetails {
+  id                   String    @id @default(uuid())
+  orderId              String    @unique
+  recipientName        String?
+  recipientPhone       String?
+  deliveryAddress      String?
+  deliveryInstructions String?
+  deliveryDate         DateTime?
+  deliveryTime         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  order                Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model DeliveryFeeConfig {
-  id                String   @id @default(uuid())
-  basePostalCode    String
-  type              String   // "distance-based" or "flat"
-  distanceFeePerKm  Int?     // Fee per kilometer, optional
-  customRules       CustomDeliveryRule[]
+  id               String               @id @default(uuid())
+  basePostalCode   String
+  type             String // "distance-based" or "flat"
+  distanceFeePerKm Int? // Fee per kilometer, optional
+  customRules      CustomDeliveryRule[]
 }
 
 model CustomDeliveryRule {
@@ -115,6 +117,21 @@ model CustomDeliveryRule {
   deliveryFeeConfigId String
 }
 
+model OrderItem {
+  id              String   @id @default(uuid())
+  orderId         String
+  productId       String?
+  description     String?
+  type            String? // "product" or "custom"
+  priceInCents    Int
+  quantity        Int
+  subtotalInCents Int
+  cardMessage     String? // Store personalized card message
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
 
 model CarouselImage {
   id        Int      @id @default(autoincrement()) @map("_id")
@@ -132,7 +149,6 @@ model Banner {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
 
 model HomeSetting {
   id              String   @id @default(uuid())

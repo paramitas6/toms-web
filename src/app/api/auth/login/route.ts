@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     // Find the user
     const user = await db.user.findUnique({ where: { email } });
     if (!user) {
+      // To prevent user enumeration, use the same error message
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 

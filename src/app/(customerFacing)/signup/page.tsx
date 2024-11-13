@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const SignupPage = () => {
   const router = useRouter();
@@ -41,8 +42,8 @@ const SignupPage = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 max-w-md">
-      <h1 className="text-2xl font-bold mb-4">Sign Up</h1>
+    <div className="container mx-auto p-4 max-w-md text-center">
+      <h1 className="text-5xl font-gotham tracking-wider m-12">Join Us</h1>
       {error && <p className="text-red-500 mb-2">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
@@ -80,8 +81,11 @@ const SignupPage = () => {
           onChange={handleChange}
           className="w-full p-2 border rounded"
         />
-        <button type="submit" className="w-full bg-blue-500 text-white p-2 rounded">
+        
+        <button type="submit" className="w-full bg-gray-700 text-white p-2 rounded">
+
           Sign Up
+
         </button>
       </form>
     </div>

@@ -12,6 +12,8 @@ interface DeliveryOptionsProps {
   setDeliveryOption: (option: string) => void;
   recipientName: string;
   setRecipientName: (value: string) => void;
+  recipientPhone: string;
+  setRecipientPhone: (value: string) => void;
   deliveryAddress: string;
   setDeliveryAddress: (value: string) => void;
   deliveryInstructions: string;
@@ -31,6 +33,8 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
   setDeliveryOption,
   recipientName,
   setRecipientName,
+  recipientPhone,
+  setRecipientPhone,
   deliveryAddress,
   setDeliveryAddress,
   deliveryInstructions,
@@ -60,7 +64,9 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
           setDeliveryFee(fee); // Pass the fee to parent if setter is provided
         }
       } catch (error: any) {
-        setDeliveryFeeError(error.message || "Failed to calculate delivery fee.");
+        setDeliveryFeeError(
+          error.message || "Failed to calculate delivery fee."
+        );
         if (setDeliveryFee) {
           setDeliveryFee(0); // Reset fee if there's an error
         }
@@ -96,7 +102,7 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
     <>
       {/* Delivery Option */}
       <div>
-        <div className="mt-2 flex justify-around">
+        <div className="m-5 flex justify-around">
           <label className="inline-flex items-center">
             <input
               type="radio"
@@ -124,80 +130,103 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
 
       {/* Delivery Details */}
       {deliveryOption === "delivery" && (
-        <div className="space-y-4">
-          {/* Recipient Name */}
-          <div className="mt-4">
-            <Label htmlFor="recipientName">Recipient Name</Label>
-            <Input
-              id="recipientName"
-              type="text"
-              placeholder="Enter recipient's name"
-              value={recipientName}
-              onChange={(e) => setRecipientName(e.target.value)}
-              required
-              className="mt-1 focus:border-red-500 focus:ring-red-500"
-            />
-          </div>
+        <>
+          <div className="flex w-2/3 justify-between gap-5 mx-auto">
+            <div className="space-y-4 flex flex-col w-1/2">
+              {/* Recipient Name */}
+              <div className="">
+                <Label htmlFor="recipientName">Recipient Name</Label>
+                <Input
+                  id="recipientName"
+                  type="text"
+                  placeholder="Enter recipient's name"
+                  value={recipientName}
+                  onChange={(e) => setRecipientName(e.target.value)}
+                  required
+                  className="mt-1 focus:border-red-500 focus:ring-red-500"
+                />
+              </div>
 
-          {/* Delivery Address */}
-          <div>
-            <Label htmlFor="deliveryAddress">Delivery Address</Label>
-            <Input
-              id="deliveryAddress"
-              placeholder="Enter delivery address"
-              value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
-              required
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
-            ></Input>
-          </div>
+              {/* Recipient Name */}
+              <div className="">
+                <Label htmlFor="recipientPhone">Recipient Phone</Label>
+                <Input
+                  id="recipientPhone"
+                  type="tel"
+                  placeholder="Enter recipient's Phone Number"
+                  value={recipientPhone}
+                  onChange={(e) => setRecipientPhone(e.target.value)}
+                  required
+                  className="mt-1 focus:border-red-500 focus:ring-red-500"
+                />
+              </div>
+            </div>
 
-          {/* Postal Code Input */}
-          <div>
-            <Label htmlFor="postalCode">Postal Code</Label>
-            <Input
-              id="postalCode"
-              type="text"
-              placeholder="Enter postal code"
-              value={postalCode}
-              onChange={(e) => setPostalCode(e.target.value.toUpperCase())}
-              onBlur={handlePostalCodeBlur} // Attach onBlur handler
-              required
-              className="mt-1 focus:border-red-500 focus:ring-red-500"
-            />
-          </div>
+            <div className="flex-col w-1/2">
+              {/* Delivery Address */}
+              <div>
+                <Label htmlFor="deliveryAddress">Street Address</Label>
+                <Input
+                  id="deliveryAddress"
+                  placeholder="Enter delivery address"
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                  required
+                  className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
+                ></Input>
+              </div>
 
+              {/* Postal Code Input */}
+              <div className="mt-4">
+                <Label htmlFor="postalCode">Postal Code</Label>
+                <Input
+                  id="postalCode"
+                  type="text"
+                  placeholder="Enter postal code"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value.toUpperCase())}
+                  onBlur={handlePostalCodeBlur} // Attach onBlur handler
+                  required
+                  className="mt-1 focus:border-red-500 focus:ring-red-500"
+                />
+              </div>
+            </div>
+          </div>
           {/* Delivery Instructions */}
-          <div>
-            <Label htmlFor="deliveryInstructions">Delivery Instructions</Label>
-            <textarea
-              id="deliveryInstructions"
-              placeholder="Enter any delivery instructions..."
-              value={deliveryInstructions}
-              onChange={(e) => setDeliveryInstructions(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
-              rows={2}
-            ></textarea>
-          </div>
+          <div className="w-2/3 mx-auto mt-5">
+            <div>
+              <Label htmlFor="deliveryInstructions">
+                Buzzer Code / Other Instructions
+              </Label>
+              <textarea
+                id="deliveryInstructions"
+                placeholder="*Important: Missing buzzer code or other instructions may result in unsuccessful delivery."
+                value={deliveryInstructions}
+                onChange={(e) => setDeliveryInstructions(e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
+                rows={2}
+              ></textarea>
+            </div>
 
-          {/* Delivery Fee */}
-          <div className="text-end">
-            {deliveryFeeError && (
-              <p className="text-red-600 text-sm mt-1">
-                {deliveryFeeError}
-              </p>
-            )}
-            {loadingDeliveryFee && (
-              <p className="text-gray-600 text-sm mt-1">Calculating...</p>
-            )}
-            {/* Optional: Display the calculated delivery fee */}
-            {deliveryFee !== undefined && !loadingDeliveryFee && !deliveryFeeError && (
-              <p className="text-green-600 text-sm mt-1">
-                Delivery Fee: ${deliveryFee.toFixed(2)}
-              </p>
-            )}
+            {/* Delivery Fee */}
+            <div className="text-end">
+              {deliveryFeeError && (
+                <p className="text-red-600 text-sm mt-1">{deliveryFeeError}</p>
+              )}
+              {loadingDeliveryFee && (
+                <p className="text-gray-600 text-sm mt-1">Calculating...</p>
+              )}
+              {/* Optional: Display the calculated delivery fee */}
+              {deliveryFee !== undefined &&
+                !loadingDeliveryFee &&
+                !deliveryFeeError && (
+                  <p className="text-green-600 text-sm mt-1">
+                    Delivery Fee: ${deliveryFee.toFixed(2)}
+                  </p>
+                )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </>
   );

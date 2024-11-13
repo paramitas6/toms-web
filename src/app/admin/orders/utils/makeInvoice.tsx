@@ -2,8 +2,14 @@
 
 import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit'; // Import fontkit
-import { Order } from '../types'; // Ensure the path is correct
+
 import { formatCurrency } from '@/lib/formatters';
+import { Order as PrismaOrder, OrderItem } from "@prisma/client";
+interface Order extends PrismaOrder {
+  orderItems: OrderItem[];
+}
+
+
 
 // Function to fetch font bytes
 // Function to fetch font bytes
@@ -99,7 +105,7 @@ export const makeInvoice = async (order: Order): Promise<void> => {
       order.recipientName || 'N/A',
       order.deliveryAddress || 'N/A',
       order.postalCode || 'N/A',
-      order.user?.email || 'N/A',
+      order.guestEmail || 'N/A',
     ];
 
     customerDetails.forEach((line) => {
@@ -165,8 +171,6 @@ export const makeInvoice = async (order: Order): Promise<void> => {
     if (order.orderItems && order.orderItems.length > 0) {
       order.orderItems.forEach((item) => {
         const itemName =
-          item.product?.name ||
-          item.productId ||
           item.description ||
           'Item';
         const quantity = item.quantity || 0;

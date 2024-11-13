@@ -186,7 +186,7 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
     });
 
     // Set pricePaidInCents
-    formData.set("pricePaidInCents", totalPriceInCents.toString());
+    formData.set("pricePaidInCents", (totalPriceInCents*1.13).toString());
 
     // Convert isDelivery to a boolean string
     formData.set("isDelivery", isDelivery ? "true" : "false");
