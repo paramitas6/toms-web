@@ -12,7 +12,7 @@ export default function AdminLayout({
       <AdminNav />
 
       {/* Main Content Area */}
-      <main className="flex-1 p-4 overflow-auto">{children}</main>
+      <main className="flex-1 p-2 overflow-auto md:p-0 ">{children}</main>
     </div>
 
     

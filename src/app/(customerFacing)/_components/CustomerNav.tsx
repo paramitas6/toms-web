@@ -7,17 +7,13 @@ import Image from "next/image";
 import { ShoppingBag, User } from "lucide-react";
 import logo from "/public/tomslogo.png";
 import { Nav, NavLink } from "../../../components/Nav";
-import { useContext, useState, useEffect, useRef } from "react";
-import CartContext from "@/app/(customerFacing)/_components/CartComponent"; // Adjust the path
-import { UserContext } from "@/contexts/UserContext"; // Adjust the path
+import { useState, useEffect, useRef } from "react";
+import { useSession, signOut } from "next-auth/react";
 
 const CustomerNav: React.FC = () => {
-  const { cart } = useContext(CartContext);
-  const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  const { data: session } = useSession();
+  const user = session?.user;
   const [menuOpen, setMenuOpen] = useState(false);
-
-  // User Context
-  const { user, logout } = useContext(UserContext);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -39,6 +35,10 @@ const CustomerNav: React.FC = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Placeholder for cart context
+  // Replace with your actual cart context
+  const totalItems = 0; // Replace with actual total items from cart context
 
   return (
     <>
@@ -105,25 +105,22 @@ const CustomerNav: React.FC = () => {
                 </button>
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white text-black rounded-md shadow-lg py-1 z-20">
-                    <Link
+                    {/* <Link
                       href="/account-settings"
                       className="block px-4 py-2 text-sm hover:bg-gray-100"
                       onClick={() => setUserMenuOpen(false)}
                     >
                       Account Settings
-                    </Link>
+                    </Link> */}
                     <Link
-                      href="/orders"
+                      href="/account"
                       className="block px-4 py-2 text-sm hover:bg-gray-100"
                       onClick={() => setUserMenuOpen(false)}
                     >
                       View Orders
                     </Link>
                     <button
-                      onClick={async () => {
-                        await logout();
-                        setUserMenuOpen(false);
-                      }}
+                      onClick={() => signOut({ callbackUrl: "/" })}
                       className="w-full text-left block px-4 py-2 text-sm hover:bg-gray-100"
                     >
                       Logout
@@ -177,26 +174,27 @@ const CustomerNav: React.FC = () => {
           </svg>
         </button>
 
-        <NavLink href="/shop" onClick={toggleMenu}>
+        <NavLink className="text-white"href="/shop" onClick={toggleMenu}>
           Shop
         </NavLink>
-        <NavLink href="/services" onClick={toggleMenu}>
+        <NavLink  className="text-white" href="/services" onClick={toggleMenu}>
           Services
         </NavLink>
-        <NavLink href="/about" onClick={toggleMenu}>
+        <NavLink  className="text-white" href="/about" onClick={toggleMenu}>
           About
         </NavLink>
+        <hr/>
         {user && (
           <>
-            <NavLink href="/account-settings" onClick={toggleMenu}>
+            {/* <NavLink href="/account-settings" onClick={toggleMenu}>
               Account Settings
-            </NavLink>
-            <NavLink href="/orders" onClick={toggleMenu}>
+            </NavLink> */}
+            <NavLink className="text-white" href="/orders" onClick={toggleMenu}>
               View Orders
             </NavLink>
             <button
-              onClick={async () => {
-                await logout();
+              onClick={() => {
+                signOut({ callbackUrl: "/" });
                 toggleMenu();
               }}
               className="text-left px-4 py-2 text-sm hover:bg-gray-700"
@@ -206,7 +204,7 @@ const CustomerNav: React.FC = () => {
           </>
         )}
         {!user && (
-          <NavLink href="/user" onClick={toggleMenu}>
+          <NavLink className="text-white" href="/login" onClick={toggleMenu}>
             Login / Sign Up
           </NavLink>
         )}

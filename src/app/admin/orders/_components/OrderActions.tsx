@@ -104,6 +104,22 @@ export function PrintReceiptDropdownItem({ orderId }: { orderId: string }) {
   );
 }
 
+export function PrintTicketDropdownItem({ orderId }: { orderId: string }) {
+  const handlePrintReceipt = async () => {
+    await fetch("/api/print/ticket", {
+      method: "POST",
+      body: JSON.stringify({ orderId}),
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  return (
+    <DropdownMenuItem onSelect={handlePrintReceipt}>
+      Print Ticket
+    </DropdownMenuItem>
+  );
+}
+
 export function PrintDeliveryDropdownItem({ orderId }: { orderId: string }) {
   const handlePrintDeliveryDetails = async () => {
     try {
@@ -144,7 +160,7 @@ export function GenerateInvoiceDropdownItem({
 
   return (
     <DropdownMenuItem onSelect={generateAndDownload}>
-      Generate Invoice
+      Generate Invoice PDF
     </DropdownMenuItem>
   );
 }
@@ -193,7 +209,7 @@ export function CaptureTransactionDropdownItem({
 
   return (
     <>
-    <hr/>
+
       <DropdownMenuItem
         onSelect={captureTransactionHandler}
         disabled={isPaid || isLoading}
@@ -201,8 +217,7 @@ export function CaptureTransactionDropdownItem({
       >
         {isPaid ? "Payment Already Processed" : "Process Payment"}
       </DropdownMenuItem>
-      {isDelivery ? (<PrintDeliveryDropdownItem orderId={orderId} />): null}
-      <PrintReceiptDropdownItem orderId={orderId} />
+
     </>
   );
 }

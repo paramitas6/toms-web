@@ -46,45 +46,62 @@ model Image {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  password  String
-  phone     String?
-  role      String   @default("user")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  orders    Order[]
+  id               String    @id @default(uuid())
+  name             String?
+  email            String?   @unique
+  emailVerified    DateTime?
+  phone            String?
+  image            String?
+  magicLinkToken   String? // Token for passwordless authentication
+  magicLinkExpires DateTime? // Expiration for the magic link
+  sessions         Session[] // Relation to Session
+  orders           Order[] // Your existing Order model relation
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Session {
+  id           Int      @id @default(autoincrement())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 model Order {
-  id               String   @id @default(uuid())
-  invoiceNumber    String?   @unique
-  pricePaidInCents Int
-  taxInCents       Int?
-  category         String?
-  userId           String?
-  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  guestEmail       String?
-  guestName        String?
-  isDelivery       Boolean? @default(false)
-  recipientName        String?
-  recipientPhone       String?
-  deliveryAddress      String?
-  deliveryInstructions String?
-  deliveryFeeInCents   Int?
-  postalCode           String?
-  transactionId        String?
-  transactionStatus    String?
-  idempotencyKey       String?
-  notes                String? // Store additional notes
-  deliveryDate         DateTime? // Store selected delivery date
-  deliveryTime         String? // Store selected time window
-  status               String           @default("CART") // Status indicating an active cart
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  orderItems           OrderItem[]
-  deliveryDetails      DeliveryDetails?
+  id                 String   @id @default(uuid())
+  invoiceNumber      String?  @unique
+  pricePaidInCents   Int
+  deliveryFeeInCents Int?
+  taxInCents         Int?
+  category           String?
+  userId             String?
+  user               User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestEmail         String?
+  guestName          String?
+  guestPhone         String?
+  recipientName      String?
+  isDelivery         Boolean? @default(false)
+  paymentMethod     String?
+  transactionId     String?
+  transactionStatus String?
+  idempotencyKey    String?
+  notes             String? // Store additional notes
+  deliveryDate      DateTime? // Store selected delivery dat
+  deliveryTime      String? // Store selected time window
+  status            String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  orderItems        OrderItem[]
+  deliveryDetails   DeliveryDetails?
 }
 
 model DeliveryDetails {
@@ -93,7 +110,9 @@ model DeliveryDetails {
   recipientName        String?
   recipientPhone       String?
   deliveryAddress      String?
+  postalCode           String?
   deliveryInstructions String?
+  deliveryStatus       String?
   deliveryDate         DateTime?
   deliveryTime         String?
   createdAt            DateTime  @default(now())

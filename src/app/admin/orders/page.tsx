@@ -7,7 +7,7 @@ import OrdersTable from "./_components/OrdersTable";
 import db from "@/db/db";
 import { Order as PrismaOrder, User, OrderItem, Product, Image } from "@prisma/client"; // Import the necessary types
 
-interface Order extends PrismaOrder {
+interface AdminOrder extends PrismaOrder {
   user: User | null;
   orderItems: (OrderItem & {
     product: Product & {
@@ -17,7 +17,7 @@ interface Order extends PrismaOrder {
 }
 
 export default async function AdminOrdersPage() {
-  const orders: Order[] = await db.order.findMany({
+  const orders: AdminOrder[] = await db.order.findMany({
     include: {
       user: true,
       orderItems: {
@@ -29,18 +29,16 @@ export default async function AdminOrdersPage() {
           },
         },
       },
+      deliveryDetails: true, // Include delivery details
     },
     orderBy: {
       createdAt: "desc",
     },
   });
 
-  // If needed, map over orders to ensure types match
-  // For example, adjust status to be one of the allowed values
-
   return (
     <>
-      <div className="flex justify-between items-center gap-4">
+      <div className="flex justify-between items-center gap-4 pt-5">
         <PageHeader>Orders</PageHeader>
         <Button asChild>
           <Link href="/admin/orders/new">Create Order</Link>

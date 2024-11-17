@@ -1,8 +1,7 @@
-// src/app/(customerFacing)/checkout/page.tsx
-
 "use client";
 
 import React, { useContext, useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react"; // Import useSession
 import CartContext from "@/app/(customerFacing)/_components/CartComponent";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,28 +24,48 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Phone } from "lucide-react";
+import { v4 as uuidv4 } from "uuid"; // Ensure UUID is imported
+import { CalendarIcon } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 declare global {
   function appendHelcimPayIframe(checkoutToken: string): void;
 }
 
+// Enhanced Zod schema with conditional requirements
 const schema = z.object({
   isGuest: z.boolean(),
-  guestEmail: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
+  guestEmail: z.string().email().optional().or(z.literal("")).or(z.null()),
+  guestName: z.string().optional().or(z.literal("")).or(z.null()),
+  guestPhone: z
+    .string()
+    .min(10, "Phone number must be at least 10 digits")
+    .optional()
+    .or(z.literal("")),
   deliveryOption: z.enum(["pickup", "delivery"]),
   recipientName: z.string().optional(),
   recipientPhone: z.string().optional(),
   deliveryAddress: z.string().optional(),
   deliveryInstructions: z.string().optional(),
   postalCode: z.string().optional(),
-  selectedDate: z.string().min(1, "Delivery date is required."),
+  selectedDate: z
+    .string()
+    .min(1, "Delivery date is required.")
+    .refine((date) => !isNaN(Date.parse(date)), {
+      message: "Invalid delivery date format.",
+    }),
   selectedTime: z.string().min(1, "Delivery time is required."),
-  phone: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
 const CheckoutPage = () => {
+  const { data: session, status } = useSession(); // Use useSession hook
   const { cart, clearCart } = useContext(CartContext);
   const router = useRouter();
   const { toast } = useToast();
@@ -58,8 +77,10 @@ const CheckoutPage = () => {
   const [formData, setFormData] = useState<FormData>({
     isGuest: true,
     guestEmail: "",
+    guestPhone: "",
     deliveryOption: "pickup",
     recipientName: "",
+    recipientPhone: "",
     deliveryAddress: "",
     deliveryInstructions: "",
     postalCode: "",
@@ -71,7 +92,9 @@ const CheckoutPage = () => {
   const [deliveryFeeError, setDeliveryFeeError] = useState<string>("");
   const [loadingDeliveryFee, setLoadingDeliveryFee] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
 
+  // Calculate amounts
   const amountWithoutTax = cart.items.reduce(
     (acc, item) => acc + (item.quantity * item.priceInCents) / 100,
     0
@@ -79,12 +102,13 @@ const CheckoutPage = () => {
   const taxAmount = (amountWithoutTax + deliveryFee) * 0.13;
   const totalAmount = amountWithoutTax + taxAmount + deliveryFee;
 
+  // Handle input changes
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >
   ) => {
-    const { name, value, type } = e.target;
+    const { name, value, type } = e.target as HTMLInputElement;
     const checked = (e.target as HTMLInputElement).checked;
     setFormData((prev) => ({
       ...prev,
@@ -92,6 +116,24 @@ const CheckoutPage = () => {
     }));
   };
 
+  // Handle date selection
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      // Format the date as YYYY-MM-DD
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const formattedDate = `${year}-${month}-${day}`;
+      setFormData((prev) => ({
+        ...prev,
+        selectedDate: formattedDate,
+      }));
+      // Close the date picker popover
+      setIsDatePickerOpen(false);
+    }
+  };
+
+  // Enhanced validation with conditional logic
   const validate = useCallback(() => {
     const result = schema.safeParse(formData);
     if (!result.success) {
@@ -108,19 +150,117 @@ const CheckoutPage = () => {
       });
       return false;
     }
+
+    // Additional conditional validations
+    if (formData.deliveryOption === "delivery") {
+      if (!formData.recipientName) {
+        setErrors((prev) => ({
+          ...prev,
+          recipientName: "Recipient name is required for delivery.",
+        }));
+        toast({
+          variant: "destructive",
+          description: "Recipient name is required for delivery.",
+        });
+        return false;
+      }
+      if (!formData.recipientPhone) {
+        setErrors((prev) => ({
+          ...prev,
+          recipientPhone: "Recipient phone is required for delivery.",
+        }));
+        toast({
+          variant: "destructive",
+          description: "Recipient phone is required for delivery.",
+        });
+        return false;
+      }
+      if (!formData.deliveryAddress) {
+        setErrors((prev) => ({
+          ...prev,
+          deliveryAddress: "Delivery address is required for delivery.",
+        }));
+        toast({
+          variant: "destructive",
+          description: "Delivery address is required for delivery.",
+        });
+        return false;
+      }
+      if (!formData.postalCode) {
+        setErrors((prev) => ({
+          ...prev,
+          postalCode: "Postal code is required for delivery.",
+        }));
+        toast({
+          variant: "destructive",
+          description: "Postal code is required for delivery.",
+        });
+        return false;
+      }
+    }
+
+    if (formData.isGuest && !formData.guestEmail) {
+      setErrors((prev) => ({
+        ...prev,
+        guestEmail: "Guest email is required.",
+      }));
+      toast({
+        variant: "destructive",
+        description: "Guest email is required.",
+      });
+      return false;
+    }
+
+    if (formData.isGuest && !formData.guestPhone) {
+      setErrors((prev) => ({
+        ...prev,
+        guestPhone: "Guest phone number is required.",
+      }));
+      toast({
+        variant: "destructive",
+        description: "Guest phone number is required.",
+      });
+      return false;
+    }
+
+    // Optional: Validate if selectedDate is a valid date string
+    if (formData.selectedDate) {
+      const date = new Date(formData.selectedDate);
+      if (isNaN(date.getTime())) {
+        setErrors((prev) => ({
+          ...prev,
+          selectedDate: "Invalid delivery date.",
+        }));
+        toast({
+          variant: "destructive",
+          description: "Invalid delivery date.",
+        });
+        return false;
+      }
+    }
+
     setErrors({});
     return true;
   }, [formData, toast]);
 
+  // Process order and handle API response
   const processOrder = async (transaction: any, transactionId: string) => {
     try {
       const response = await fetch("/api/processOrder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cartItems: cart.items,
+          // Map cartItems to include 'type' field
+          cartItems: cart.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            priceInCents: item.priceInCents,
+            name: item.name,
+            type: "product", // Set 'type' as 'product' or determine based on your logic
+          })),
           deliveryOption: formData.deliveryOption,
           recipientName: formData.recipientName,
+          recipientPhone: formData.recipientPhone,
           deliveryAddress: formData.deliveryAddress,
           deliveryInstructions: formData.deliveryInstructions,
           postalCode: formData.postalCode,
@@ -135,6 +275,7 @@ const CheckoutPage = () => {
           secretToken,
           isGuest: formData.isGuest,
           guestEmail: formData.isGuest ? formData.guestEmail : "",
+          guestPhone: formData.isGuest ? formData.guestPhone : "",
         }),
       });
 
@@ -143,7 +284,7 @@ const CheckoutPage = () => {
         toast({
           variant: "destructive",
           description:
-            errorData.message ||
+            errorData.error ||
             "Error processing order. Please contact support.",
         });
         setLoading(false);
@@ -153,6 +294,7 @@ const CheckoutPage = () => {
       const result = await response.json();
       const orderId = result.orderId;
       clearCart();
+      router.push(`/order-confirmation?orderId=${orderId}`);
       window.location.href = `/order-confirmation?orderId=${orderId}`;
     } catch (error) {
       console.error("Error processing order:", error);
@@ -164,6 +306,7 @@ const CheckoutPage = () => {
     }
   };
 
+  // Handle successful payment
   const handlePaymentSuccess = async (
     transaction: any,
     transactionId: string
@@ -171,6 +314,7 @@ const CheckoutPage = () => {
     await processOrder(transaction, transactionId);
   };
 
+  // Handle messages from the payment iframe
   const handleMessage = useCallback(
     async (event: MessageEvent) => {
       const identifier = "helcim-pay-js-" + checkoutToken;
@@ -202,6 +346,7 @@ const CheckoutPage = () => {
     return () => window.removeEventListener("message", handleMessage);
   }, [handleMessage]);
 
+  // Handle form submission
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!validate()) return;
@@ -225,7 +370,7 @@ const CheckoutPage = () => {
         toast({
           variant: "destructive",
           description:
-            errorData.message || "Error initiating payment. Please try again.",
+            errorData.error || "Error initiating payment. Please try again.",
         });
         setLoading(false);
         return;
@@ -265,9 +410,10 @@ const CheckoutPage = () => {
     }
   };
 
+  // Generate available time slots
   const generateTimeSlots = () => {
     const slots = [];
-    for (let hour = 10; hour < 18; hour += 2) {
+    for (let hour = 9; hour < 16; hour += 2) {
       const startHour = hour % 12 === 0 ? 12 : hour % 12;
       const endHour = (hour + 2) % 12 === 0 ? 12 : (hour + 2) % 12;
       const period = hour < 12 ? "AM" : "PM";
@@ -276,34 +422,21 @@ const CheckoutPage = () => {
     return slots;
   };
 
-  const [loadingUser, setLoadingUser] = useState<boolean>(true);
-
+  // Pre-populate form data when session data is available
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await fetch("/api/auth/user", {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
-        const data = await response.json();
-        if (data.user) {
-          setFormData((prev) => ({
-            ...prev,
-            isGuest: false,
-            guestEmail: data.user.email,
-          }));
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      } finally {
-        setLoadingUser(false);
-      }
-    };
+    if (status === "authenticated" && session.user) {
+      setFormData((prev) => ({
+        ...prev,
+        isGuest: false,
+        guestEmail: session.user.email || "",
+        guestPhone: session.user.phone || "",
+        recipientName: session.user.name || "",
+        recipientPhone: session.user.phone || "",
+      }));
+    }
+  }, [status, session]);
 
-    fetchUser();
-  }, []);
-
-  if (loadingUser) {
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p>Loading...</p>
@@ -324,7 +457,7 @@ const CheckoutPage = () => {
         }}
       />
       <div className="min-h-screen py-8">
-        <div className="w-2/3 mx-auto p-4">
+        <div className="w-full lg:w-2/3 mx-auto p-4">
           <h1 className="text-5xl font-gotham tracking-wider text-center m-8">
             Checkout
           </h1>
@@ -333,10 +466,11 @@ const CheckoutPage = () => {
             <div className="mb-4 p-4 bg-slate-50 rounded">
               <p>
                 You are logged in as <strong>{formData.guestEmail}</strong>.
-                Your email will be used for this checkout.
+                Your email and phone will be used for this checkout.
               </p>
             </div>
           )}
+
           <DeliveryOptions
             deliveryOption={formData.deliveryOption}
             setDeliveryOption={(option: string) => {
@@ -377,8 +511,94 @@ const CheckoutPage = () => {
             deliveryFee={deliveryFee}
             setDeliveryFee={setDeliveryFee}
           />
-          <div className="flex mx-auto gap-4 font-montserrat">
-            <div className="flex flex-col w-1/4">
+
+          {/* Date Picker Integration */}
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              When would you like your order?
+            </label>
+            <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`w-full justify-between ${
+                    !formData.selectedDate && "text-muted-foreground"
+                  }`}
+                >
+                  {formData.selectedDate
+                    ? new Date(formData.selectedDate).toLocaleDateString(
+                        undefined,
+                        {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        }
+                      )
+                    : "Pick a date"}
+                  <CalendarIcon className="ml-2 h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={
+                    formData.selectedDate
+                      ? new Date(formData.selectedDate)
+                      : undefined
+                  }
+                  onSelect={handleDateSelect}
+                  disabled={(date) =>
+                    date < new Date() || date < new Date("1900-01-01")
+                  }
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {errors.selectedDate && (
+              <p className="mt-1 text-sm text-red-600">{errors.selectedDate}</p>
+            )}
+            <p className="mt-1 text-sm text-gray-500">
+              Please select your preferred delivery date.
+            </p>
+          </div>
+
+          {/* Time Picker */}
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              What time should we deliver?
+            </label>
+            <Select
+              value={formData.selectedTime}
+              onValueChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  selectedTime: value,
+                }))
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Please select a preferred time" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem disabled value="10 AM">
+                  For non-standard delivery times or precise scheduling, kindly
+                  reach out to us.
+                </SelectItem>
+                {generateTimeSlots().map((slot) => (
+                  <SelectItem key={slot} value={slot}>
+                    {slot}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.selectedTime && (
+              <p className="mt-1 text-sm text-red-600">{errors.selectedTime}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col md:flex-row md:gap-4 md: mx-auto gap-4 font-montserrat mt-8">
+            {/* Guest Checkout Section */}
+            <div className="w-full md:w-1/4">
               <GuestCheckout
                 isGuest={formData.isGuest}
                 setIsGuest={(value) =>
@@ -388,65 +608,27 @@ const CheckoutPage = () => {
                 setGuestEmail={(value) =>
                   setFormData((prev) => ({ ...prev, guestEmail: value }))
                 }
+                guestPhone={formData.guestPhone || ""}
+                setGuestPhone={(value) =>
+                  setFormData((prev) => ({ ...prev, guestPhone: value }))
+                }
+                guestName={formData.guestName || ""}
+                setGuestName={(value) =>
+                  setFormData((prev) => ({ ...prev, guestName: value }))
+                }
                 disabled={!formData.isGuest}
               />
 
-              <div className="">
-                <div className="mb-4">
-                  <Label htmlFor="selectedDate">Date*</Label>
-                  <Input
-                    type="date"
-                    id="selectedDate"
-                    name="selectedDate"
-                    value={formData.selectedDate}
-                    onChange={handleChange}
-                    min={new Date().toISOString().split("T")[0]}
-                    required
-                    className="mt-1 block w-full"
-                  />
+              {/* Recipient Details */}
+              {!formData.isGuest && formData.deliveryOption === "pickup" && (
+                <div className="mt-4 p-4 bg-gray-100 rounded">
+                  <p className="text-center">Welcome</p>
                 </div>
-                <div className="mb-4">
-                  <Label htmlFor="selectedTime">Time*</Label>
-                  <Select
-                    name="selectedTime"
-                    value={formData.selectedTime}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        selectedTime: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a time slot" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Before 10AM">Before 10AM</SelectItem>
-                      {generateTimeSlots().map((slot, idx) => (
-                        <SelectItem key={idx} value={slot}>
-                          {slot}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="mb-4">
-                  <Label htmlFor="selectedTime">Your Contact Number</Label>
-                  <Input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone || ""}
-                    onChange={handleChange}
-                    required
-                    className="mt-1 block w-full"
-                  />
-                </div>
-              </div>
+              )}
             </div>
 
-            <div className="flex flex-col w-full">
+            {/* Order Items and Summary Section */}
+            <div className="w-full md:w-3/4">
               {cart.items.length > 0 ? (
                 <div className="flex flex-col lg:flex-row lg:space-x-8">
                   <div className="w-full p-6">
@@ -495,10 +677,18 @@ const CheckoutPage = () => {
             waiverAccepted={waiverAccepted}
             setWaiverAccepted={setWaiverAccepted}
             handlePlaceOrder={() => handleSubmit()}
+            deliveryAddress={formData.deliveryAddress || ""}
+            deliveryInstructions={formData.deliveryInstructions || ""}
+            deliveryDate={formData.selectedDate}
+            deliveryTime={formData.selectedTime}
           />
 
           <div className="mt-6">
-            <p className="text-center p-3 text-red-500">*Please note the you will not be charged at this time. Your order will be confirmed by our florist to ensure the freshest blooms before the transaction is processed.</p>
+            <p className="text-center p-3 text-gray-600">
+              *Please note that you will not be charged at this time. Your order
+              will be confirmed by our florist to ensure the freshest blooms
+              before the transaction is processed.
+            </p>
             <Button
               className="w-full bg-black text-white py-3 hover:bg-gray-800 font-oSans text-lg"
               type="button"
@@ -514,7 +704,8 @@ const CheckoutPage = () => {
                     !formData.deliveryAddress ||
                     !!deliveryFeeError ||
                     loadingDeliveryFee ||
-                    (formData.isGuest && !formData.guestEmail)))
+                    (formData.isGuest &&
+                      (!formData.guestEmail || !formData.guestPhone))))
               }
             >
               {loading ? "Processing..." : "Place Order"}

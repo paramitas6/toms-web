@@ -1,5 +1,3 @@
-// src/app/checkout/components/DeliveryOptions.tsx
-
 "use client";
 
 import React from "react";
@@ -101,40 +99,38 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
   return (
     <>
       {/* Delivery Option */}
-      <div>
-        <div className="m-5 flex justify-around">
-          <label className="inline-flex items-center">
-            <input
-              type="radio"
-              className="form-radio text-red-500"
-              name="deliveryOption"
-              value="pickup"
-              checked={deliveryOption === "pickup"}
-              onChange={() => setDeliveryOption("pickup")}
-            />
-            <span className="ml-2">Pickup</span>
-          </label>
-          <label className="inline-flex items-center">
-            <input
-              type="radio"
-              className="form-radio text-red-500"
-              name="deliveryOption"
-              value="delivery"
-              checked={deliveryOption === "delivery"}
-              onChange={() => setDeliveryOption("delivery")}
-            />
-            <span className="ml-2">Delivery</span>
-          </label>
-        </div>
+      <div className="m-5 flex justify-around">
+        <label className="inline-flex items-center">
+          <input
+            type="radio"
+            className="form-radio text-red-500"
+            name="deliveryOption"
+            value="pickup"
+            checked={deliveryOption === "pickup"}
+            onChange={() => setDeliveryOption("pickup")}
+          />
+          <span className="ml-2">Pickup</span>
+        </label>
+        <label className="inline-flex items-center">
+          <input
+            type="radio"
+            className="form-radio text-red-500"
+            name="deliveryOption"
+            value="delivery"
+            checked={deliveryOption === "delivery"}
+            onChange={() => setDeliveryOption("delivery")}
+          />
+          <span className="ml-2">Delivery</span>
+        </label>
       </div>
 
       {/* Delivery Details */}
       {deliveryOption === "delivery" && (
         <>
-          <div className="flex w-2/3 justify-between gap-5 mx-auto">
-            <div className="space-y-4 flex flex-col w-1/2">
+          <div className="flex flex-col md:flex-row w-full md:w-2/3 gap-5 mx-auto">
+            <div className="space-y-4 flex flex-col w-full md:w-1/2">
               {/* Recipient Name */}
-              <div className="">
+              <div>
                 <Label htmlFor="recipientName">Recipient Name</Label>
                 <Input
                   id="recipientName"
@@ -147,8 +143,8 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
                 />
               </div>
 
-              {/* Recipient Name */}
-              <div className="">
+              {/* Recipient Phone */}
+              <div>
                 <Label htmlFor="recipientPhone">Recipient Phone</Label>
                 <Input
                   id="recipientPhone"
@@ -162,7 +158,7 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
               </div>
             </div>
 
-            <div className="flex-col w-1/2">
+            <div className="space-y-4 flex flex-col w-full md:w-1/2">
               {/* Delivery Address */}
               <div>
                 <Label htmlFor="deliveryAddress">Street Address</Label>
@@ -173,11 +169,11 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
                   onChange={(e) => setDeliveryAddress(e.target.value)}
                   required
                   className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
-                ></Input>
+                />
               </div>
 
               {/* Postal Code Input */}
-              <div className="mt-4">
+              <div>
                 <Label htmlFor="postalCode">Postal Code</Label>
                 <Input
                   id="postalCode"
@@ -192,35 +188,33 @@ const DeliveryOptions: React.FC<DeliveryOptionsProps> = ({
               </div>
             </div>
           </div>
+
           {/* Delivery Instructions */}
-          <div className="w-2/3 mx-auto mt-5">
-            <div>
-              <Label htmlFor="deliveryInstructions">
-                Buzzer Code / Other Instructions
-              </Label>
-              <textarea
-                id="deliveryInstructions"
-                placeholder="*Important: Missing buzzer code or other instructions may result in unsuccessful delivery."
-                value={deliveryInstructions}
-                onChange={(e) => setDeliveryInstructions(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
-                rows={2}
-              ></textarea>
-            </div>
+          <div className="w-full md:w-2/3 mx-auto mt-5">
+            <Label htmlFor="deliveryInstructions">
+              Buzzer Code / Other Instructions
+            </Label>
+            <textarea
+              id="deliveryInstructions"
+              placeholder="*Important: Missing buzzer code or other instructions may result in unsuccessful delivery."
+              value={deliveryInstructions}
+              onChange={(e) => setDeliveryInstructions(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2 text-black focus:border-red-500 focus:ring-red-500"
+              rows={2}
+            ></textarea>
 
             {/* Delivery Fee */}
-            <div className="text-end">
+            <div className="text-end mt-2">
               {deliveryFeeError && (
-                <p className="text-red-600 text-sm mt-1">{deliveryFeeError}</p>
+                <p className="text-red-600 text-sm">{deliveryFeeError}</p>
               )}
               {loadingDeliveryFee && (
-                <p className="text-gray-600 text-sm mt-1">Calculating...</p>
+                <p className="text-gray-600 text-sm">Calculating...</p>
               )}
-              {/* Optional: Display the calculated delivery fee */}
               {deliveryFee !== undefined &&
                 !loadingDeliveryFee &&
                 !deliveryFeeError && (
-                  <p className="text-green-600 text-sm mt-1">
+                  <p className="text-green-600 text-sm">
                     Delivery Fee: ${deliveryFee.toFixed(2)}
                   </p>
                 )}

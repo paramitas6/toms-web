@@ -21,7 +21,7 @@ export default function AdminLayout() {
       <input type="checkbox" id="sidebar-toggle" className="hidden peer" />
 
       {/* Mobile Header */}
-      <header className="md:hidden bg-gray-800 text-white flex justify-between p-4">
+      <header className="lg:hidden bg-gray-800 text-white flex justify-between p-4">
         {/* Label acts as the toggle button */}
         <label
           htmlFor="sidebar-toggle"
@@ -40,11 +40,11 @@ export default function AdminLayout() {
           left-0 
           bg-gray-600
           text-white 
-          w-52
+          w-50
           transform 
           -translate-x-full
           peer-checked:translate-x-0
-          md:translate-x-0
+          lg:translate-x-0
           transition-transform 
           duration-200 
           ease-in-out
@@ -56,7 +56,7 @@ export default function AdminLayout() {
         {/* Close Button for Mobile */}
         <label
           htmlFor="sidebar-toggle"
-          className="absolute top-4 right-4 cursor-pointer md:hidden"
+          className="absolute top-4 right-4 cursor-pointer lg:hidden"
           aria-label="Close Sidebar"
         >
           <FaBars className="text-2xl" />
@@ -134,7 +134,7 @@ export default function AdminLayout() {
               className="flex flex-row space-x-3 justify-start  py-2  rounded hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
             >
               <FaColumns className="text-xl" />
-              <span>Dashboard</span>
+              <span>Calendar</span>
             </NavLink>
           </Nav>
         </div>
@@ -143,12 +143,12 @@ export default function AdminLayout() {
       {/* Overlay for Mobile when Sidebar is Open */}
       <label
         htmlFor="sidebar-toggle"
-        className="fixed inset-0 bg-black opacity-50 z-40 md:hidden peer-checked:block hidden"
+        className="fixed inset-0 bg-black opacity-50 z-40 lg:hidden peer-checked:block hidden"
         aria-hidden="true"
       ></label>
 
       {/* Main Content */}
-      <main className="ml-0 md:ml-52 transition-all duration-200">
+      <main className="ml-0 lg:ml-52 transition-all duration-200">
         {/* Your main admin content goes here */}
       </main>
     </>

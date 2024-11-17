@@ -15,22 +15,15 @@ import { useState, useEffect } from "react";
 import { addOrder, updateOrder } from "../../_actions/orders";
 import { useFormState, useFormStatus } from "react-dom";
 import { Textarea } from "@/components/ui/textarea";
-import { Order as PrismaOrder, Product, User } from "@prisma/client";
+import { Order as PrismaOrder, Product, User, OrderItem, DeliveryDetails } from "@prisma/client";
 
-// Extended Order interface to include orderItems
+// Extended Order interface to include orderItems and deliveryDetails
 interface Order extends PrismaOrder {
   orderItems: OrderItem[];
+  deliveryDetails?: DeliveryDetails | null;
 }
 
 // Order Item Interface for both products and custom orders
-interface OrderItem {
-  type: string | null;
-  productId?: string | null;
-  description?: string | null;
-  quantity: number;
-  priceInCents: number; // Unit price
-  subtotalInCents: number;
-}
 
 // Props for OrderForm component
 interface OrderFormProps {
@@ -53,43 +46,57 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
     order?.status || "payment pending"
   );
   const [notes, setNotes] = useState<string>(order?.notes || "");
-  const [postalCode, setPostalCode] = useState<string>(order?.postalCode || "");
-  const [deliveryAddress, setDeliveryAddress] = useState<string>(
-    order?.deliveryAddress || ""
-  );
-  const [deliveryInstructions, setDeliveryInstructions] = useState<string>(
-    order?.deliveryInstructions || ""
-  );
-  const [deliveryDate, setDeliveryDate] = useState<string>(
-    order?.deliveryDate ? order.deliveryDate.toISOString().split("T")[0] : ""
-  );
-  const [deliveryTime, setDeliveryTime] = useState<string>(
-    order?.deliveryTime || ""
-  );
+
+  // DeliveryDetails state
+  const [deliveryDetails, setDeliveryDetails] = useState<DeliveryDetails>({
+    recipientName: order?.deliveryDetails?.recipientName || "",
+    recipientPhone: order?.deliveryDetails?.recipientPhone || "",
+    deliveryAddress: order?.deliveryDetails?.deliveryAddress || "",
+    postalCode: order?.deliveryDetails?.postalCode || "",
+    deliveryInstructions: order?.deliveryDetails?.deliveryInstructions || "",
+    deliveryStatus: order?.deliveryDetails?.deliveryStatus || "",
+    deliveryDate: order?.deliveryDetails?.deliveryDate || null,
+    deliveryTime: order?.deliveryDetails?.deliveryTime || "",
+    id: order?.deliveryDetails?.id || uuidv4(),
+    orderId: order?.deliveryDetails?.orderId || "",
+    createdAt: order?.deliveryDetails?.createdAt || new Date(),
+    updatedAt: order?.deliveryDetails?.updatedAt || new Date(),
+  });
 
   const [orderItems, setOrderItems] = useState<OrderItem[]>(
-    order?.orderItems.map((item) => {
-      if (item.type === "product" && item.productId) {
-        const product = products.find((p) => p.id === item.productId);
-        return {
-          type: "product",
-          productId: item.productId,
-          description: "",
-          quantity: item.quantity,
-          priceInCents: product?.priceInCents || 0,
-          subtotalInCents: (product?.priceInCents || 0) * item.quantity,
-        };
-      } else {
-        return {
-          type: "custom",
-          description: item.description || "",
-          quantity: item.quantity,
-          priceInCents: item.priceInCents,
-          subtotalInCents: item.priceInCents * item.quantity,
-        };
-      }
-    }) || []
-  );
+      order?.orderItems.map((item) => {
+        if (item.type === "product" && item.productId) {
+          const product = products.find((p) => p.id === item.productId);
+          return {
+            id: item.id,
+            orderId: item.orderId,
+            type: "product",
+            productId: item.productId,
+            description: "",
+            quantity: item.quantity,
+            priceInCents: product?.priceInCents || 0,
+            subtotalInCents: (product?.priceInCents || 0) * item.quantity,
+            cardMessage: item.cardMessage || null,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+          };
+        } else {
+          return {
+            id: item.id,
+            orderId: item.orderId,
+            type: "custom",
+            description: item.description || "",
+            quantity: item.quantity,
+            priceInCents: item.priceInCents,
+            subtotalInCents: item.priceInCents * item.quantity,
+            cardMessage: item.cardMessage || null,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            productId: null,
+          };
+        }
+      }) || []
+    );
   const [totalPriceInCents, setTotalPriceInCents] = useState<number>(0);
 
   const [submissionError, setSubmissionError] = useState<string | null>(null);
@@ -104,22 +111,34 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
       setOrderItems((prev) => [
         ...prev,
         {
+          id: '',
+          orderId: '',
           type,
           quantity: 1,
           subtotalInCents: 0,
           priceInCents: 0,
           productId: null,
+          description: null,
+          cardMessage: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
       ]);
     } else {
       setOrderItems((prev) => [
         ...prev,
         {
+          id: '',
+          orderId: '',
           type,
           quantity: 1,
           subtotalInCents: 0,
           priceInCents: 0,
+          productId: null,
           description: "",
+          cardMessage: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
       ]);
     }
@@ -161,10 +180,21 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
     });
   };
 
+  const handleDeliveryDetailChange = (
+    field: keyof DeliveryDetails,
+    value: any
+  ) => {
+    setDeliveryDetails((prev) => ({
+      ...prev,
+      [field]: value,
+      updatedAt: new Date(),
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Create a new FormData object without serializing orderItems
+    // Create a new FormData object
     const formData = new FormData(e.currentTarget);
 
     // Append individual orderItems fields
@@ -186,17 +216,46 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
     });
 
     // Set pricePaidInCents
-    formData.set("pricePaidInCents", (totalPriceInCents*1.13).toString());
+    formData.set("pricePaidInCents", (totalPriceInCents * 1.13).toString());
 
     // Convert isDelivery to a boolean string
     formData.set("isDelivery", isDelivery ? "true" : "false");
 
     if (userId && userId !== "none") {
       formData.set("userId", userId);
-    }else(formData.delete("userId"));
+    } else {
+      formData.delete("userId");
+    }
+
+    // Append DeliveryDetails fields if isDelivery is true
+    if (isDelivery) {
+      formData.set("recipientName", deliveryDetails.recipientName || "");
+      formData.set("recipientPhone", deliveryDetails.recipientPhone || "");
+      formData.set("deliveryAddress", deliveryDetails.deliveryAddress || "");
+      formData.set("postalCode", deliveryDetails.postalCode || "");
+      formData.set(
+        "deliveryInstructions",
+        deliveryDetails.deliveryInstructions || ""
+      );
+      formData.set(
+        "deliveryDate",
+        deliveryDetails.deliveryDate
+          ? deliveryDetails.deliveryDate.toISOString()
+          : ""
+      );
+      formData.set("deliveryTime", deliveryDetails.deliveryTime || "");
+    } else {
+      formData.delete("recipientName");
+      formData.delete("recipientPhone");
+      formData.delete("deliveryAddress");
+      formData.delete("postalCode");
+      formData.delete("deliveryInstructions");
+      formData.delete("deliveryDate");
+      formData.delete("deliveryTime");
+    }
 
     try {
-      console.log(formData);
+      console.log(Object.fromEntries(formData.entries())); // For debugging
       await action(formData);
     } catch (err) {
       setSubmissionError("Failed to save order. Please try again.");
@@ -209,8 +268,10 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
       className="space-y-6 bg-white p-6 rounded-lg shadow-md"
     >
       <div className="flex flex-col md:flex-row w-full space-y-4 md:space-y-0 md:space-x-4">
+        {/* Left Section: Customer and Order Status */}
         <div className="flex-col w-full md:w-1/4">
           <div className="flex-col p-5">
+            {/* Customer Selection */}
             <div className="space-y-2">
               <Label htmlFor="userId">Customer</Label>
               <Select
@@ -231,6 +292,8 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Delivery Option */}
             <div className="space-y-2">
               <Label htmlFor="isDelivery">Delivery Option</Label>
               <Select
@@ -249,6 +312,7 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
               </Select>
             </div>
 
+            {/* Order Status */}
             <div className="space-y-2">
               <Label htmlFor="status">Order Status</Label>
               <Select
@@ -274,16 +338,27 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
             </div>
           </div>
 
-          <div className="flex-col p-5">
-            <div className="flex-col">
+          {/* Delivery Date and Time */}
+          {isDelivery && (
+            <div className="flex-col p-5">
               <div className="space-y-2">
                 <Label htmlFor="deliveryDate">Due Date</Label>
                 <Input
                   type="date"
                   id="deliveryDate"
                   name="deliveryDate"
-                  value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  value={
+                    deliveryDetails.deliveryDate
+                      ? new Date(deliveryDetails.deliveryDate).toISOString().split("T")[0]
+                      : ""
+                  }
+                  onChange={(e) =>
+                    handleDeliveryDetailChange(
+                      "deliveryDate",
+                      new Date(e.target.value)
+                    )
+                  }
+                  required={isDelivery}
                 />
               </div>
 
@@ -293,13 +368,18 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
                   type="time"
                   id="deliveryTime"
                   name="deliveryTime"
-                  value={deliveryTime}
-                  onChange={(e) => setDeliveryTime(e.target.value)}
+                  value={deliveryDetails.deliveryTime|| ""}
+                  onChange={(e) =>
+                    handleDeliveryDetailChange("deliveryTime", e.target.value)
+                  }
+                  required={isDelivery}
                 />
               </div>
             </div>
-          </div>
+          )}
         </div>
+
+        {/* Right Section: Order Items */}
         <div className="flex p-5 border-l md:border-l-0  w-full md:w-3/4">
           <div className="flex flex-col space-y-2 w-full">
             <Label className="text-lg font-semibold">Items</Label>
@@ -417,7 +497,6 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
                     </div>
                   )}
                   {/* Quantity */}
-
                   <div className="space-y-2">
                     <Label htmlFor={`orderItems[${index}][quantity]`}>
                       Quantity
@@ -459,9 +538,9 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
                 </div>
               </div>
             ))}
-
+            {/* Add Order Items Buttons */}
             <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4">
-            <Button
+              <Button
                 type="button"
                 onClick={() => addOrderItem("custom")}
                 variant="outline"
@@ -477,13 +556,13 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
               >
                 Add Existing
               </Button>
-
             </div>
           </div>
         </div>
       </div>
 
-      {isDelivery === true && (
+      {/* Delivery Details Section (if applicable) */}
+      {isDelivery && (
         <div className="flex flex-col md:flex-row p-5 border rounded-lg space-y-4 md:space-y-0 md:space-x-4">
           <div className="space-y-2 flex-1">
             <Label htmlFor="postalCode">Postal Code</Label>
@@ -491,8 +570,10 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
               type="text"
               id="postalCode"
               name="postalCode"
-              value={postalCode}
-              onChange={(e) => setPostalCode(e.target.value)}
+              value={deliveryDetails.postalCode||""}
+              onChange={(e) =>
+                handleDeliveryDetailChange("postalCode", e.target.value)
+              }
             />
           </div>
 
@@ -501,8 +582,10 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
             <Input
               id="deliveryAddress"
               name="deliveryAddress"
-              value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
+              value={deliveryDetails.deliveryAddress || ""}
+              onChange={(e) =>
+                handleDeliveryDetailChange("deliveryAddress", e.target.value)
+              }
             />
           </div>
 
@@ -511,13 +594,19 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
             <Textarea
               id="deliveryInstructions"
               name="deliveryInstructions"
-              value={deliveryInstructions}
-              onChange={(e) => setDeliveryInstructions(e.target.value)}
+              value={deliveryDetails.deliveryInstructions || ""}
+              onChange={(e) =>
+                handleDeliveryDetailChange(
+                  "deliveryInstructions",
+                  e.target.value
+                )
+              }
             />
           </div>
         </div>
       )}
 
+      {/* Notes Section */}
       <div className="space-y-2">
         <Label htmlFor="notes">Notes</Label>
         <Textarea
@@ -527,12 +616,16 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
           onChange={(e) => setNotes(e.target.value)}
         />
       </div>
+
+      {/* Total Price */}
       <div className="space-y-2">
         <Label>Total Price</Label>
         <div className="text-lg font-semibold">
           {formatCurrency(totalPriceInCents / 100)}
         </div>
       </div>
+
+      {/* Error Messages */}
       {error && (
         <div className="text-red-500">
           {Object.entries(error).map(([field, messages]) =>
@@ -546,6 +639,8 @@ export function OrderForm({ order, products, users }: OrderFormProps) {
       )}
 
       {submissionError && <div className="text-red-500">{submissionError}</div>}
+
+      {/* Submit Button */}
       <SubmitButton />
     </form>
   );
@@ -559,3 +654,6 @@ function SubmitButton() {
     </Button>
   );
 }
+
+// Utility function to generate UUID (if not already imported)
+import { v4 as uuidv4 } from 'uuid';

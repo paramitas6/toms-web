@@ -3,13 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { addUser, updateUser } from "../../_actions/users";
 import { useFormState, useFormStatus } from "react-dom";
 import { User } from "@prisma/client";
@@ -65,35 +59,6 @@ export default function UserForm({ user }: { user?: User | null }) {
               <div className="text-destructive">{error.email}</div>
             )}
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              type="password"
-              id="password"
-              name="password"
-              required={user == null}
-              defaultValue={user?.password || ""}
-            />
-            {error.password && (
-              <div className="text-destructive">{error.password}</div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
-            <Select name="role" defaultValue="user">
-              <SelectTrigger>
-                <SelectValue placeholder="" />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="user">Customer</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <SubmitButton />
         </form>
       </div>

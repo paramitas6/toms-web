@@ -49,7 +49,7 @@ export default function UserAutocomplete({
           aria-expanded={open}
           className="w-full justify-between"
         >
-          {selectedUser ? selectedUser.name : "Select Customer"}
+          {selectedUser ? selectedUser.name : "Walk In"}
           <ChevronsUpDown className="opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -62,7 +62,7 @@ export default function UserAutocomplete({
               {users.map((user) => (
                 <CommandItem
                   key={user.id}
-                  value={user.name} // Used for filtering
+                  value={user.name || ""} // Used for filtering
                   onSelect={() => {
                     // Toggle selection
                     if (selectedId === user.id) {

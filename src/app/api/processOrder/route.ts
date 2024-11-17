@@ -1,13 +1,14 @@
-// src/app/api/processOrder/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import db from "@/db/db";
+import { z } from "zod";
+import { v4 as uuidv4 } from "uuid";
+import { jwtVerify } from "jose";
+import generateInvoiceNumber from "@/lib/generateInvoiceNumber";
+import { PrismaClientValidationError } from "@prisma/client/runtime/library";
 
-import { NextRequest, NextResponse } from 'next/server';
-import db from '@/db/db';
-import { z } from 'zod';
-import { v4 as uuidv4 } from 'uuid';
-import { jwtVerify } from 'jose'; // Ensure you have 'jose' installed
-import generateInvoiceNumber from '@/lib/generateInvoiceNumber';
-
-const SECRET_KEY = new TextEncoder().encode(process.env.SECRET_KEY || 'your_secret_key');
+const SECRET_KEY = new TextEncoder().encode(
+  process.env.SECRET_KEY || "your_secret_key"
+);
 
 const orderSchema = z.object({
   cartItems: z.array(
@@ -16,14 +17,21 @@ const orderSchema = z.object({
       quantity: z.number().positive(),
       priceInCents: z.number().positive(),
       name: z.string(),
+      type: z.enum(["custom", "product"]),
     })
   ),
   deliveryOption: z.enum(["pickup", "delivery"]),
   recipientName: z.string().optional(),
+  recipientPhone: z.string().optional(),
   deliveryAddress: z.string().optional(),
-  deliveryInstructions: z.string().optional(),
   postalCode: z.string().optional(),
-  selectedDate: z.string().min(1, "Delivery date is required."),
+  deliveryInstructions: z.string().optional(),
+  selectedDate: z
+    .string()
+    .min(1, "Delivery date is required.")
+    .refine((date) => !isNaN(Date.parse(date)), {
+      message: "Invalid delivery date format.",
+    }),
   selectedTime: z.string().min(1, "Delivery time is required."),
   amountWithoutTax: z.number(),
   taxAmount: z.number(),
@@ -32,38 +40,67 @@ const orderSchema = z.object({
   transactionId: z.string().optional(),
   secretToken: z.string(),
   isGuest: z.boolean(),
-  guestEmail: z.union([z.string().email(), z.literal(''), z.null()]).optional(),
-  userId: z.string().optional(), // Add userId as optional
+  guestEmail: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
+  guestName: z.string().optional(),
+  guestPhone: z.string().optional(),
+  userId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
-    // Extract JWT from 'auth' cookie
-    const token = request.cookies.get('auth')?.value;
+    const body = await request.json();
+    const { isGuest } = body;
+
     let userId: string | null = null;
 
-    if (token) {
-      try {
-        const { payload } = await jwtVerify(token, SECRET_KEY);
-        userId = payload.userId as string;
-      } catch (err) {
-        console.error('JWT verification failed:', err);
-        // Optionally, you can return an error or treat as guest
+    if (!isGuest) {
+      const token = request.cookies.get("auth")?.value;
+
+      if (token) {
+        try {
+          const { payload } = await jwtVerify(token, SECRET_KEY);
+          userId = payload.userId as string;
+        } catch (err) {
+          console.error("JWT verification failed:", err);
+          return NextResponse.json(
+            { error: "Invalid authentication token." },
+            { status: 401 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { error: "Authentication token missing." },
+          { status: 401 }
+        );
       }
     }
 
-    const body = await request.json();
-    const validationResult = orderSchema.safeParse({ ...body, userId: userId || undefined });
+    console.log("Received Order Data:", body); // Log received data for debugging
+
+    const validationResult = orderSchema.safeParse({
+      ...body,
+      userId: userId || undefined,
+    });
 
     if (!validationResult.success) {
-      console.error('Order validation failed:', validationResult.error);
-      return NextResponse.json({ error: 'Invalid order data.' }, { status: 400 });
+      console.error(
+        "Order validation failed:",
+        validationResult.error.flatten()
+      );
+      return NextResponse.json(
+        {
+          error: "Invalid order data.",
+          details: validationResult.error.flatten(),
+        },
+        { status: 400 }
+      );
     }
 
     const {
       cartItems,
       deliveryOption,
       recipientName,
+      recipientPhone,
       deliveryAddress,
       deliveryInstructions,
       postalCode,
@@ -74,14 +111,25 @@ export async function POST(request: NextRequest) {
       deliveryFee,
       totalAmount,
       transactionId,
-      isGuest,
+      isGuest: isGuestOrder,
       guestEmail,
+      guestName,
+      guestPhone,
       userId: extractedUserId,
     } = validationResult.data;
 
-    // If not a guest and userId is not present, return an error
-    if (!isGuest && !extractedUserId) {
-      return NextResponse.json({ error: 'User not authenticated.' }, { status: 401 });
+    if (deliveryOption === "delivery") {
+      if (
+        !recipientName ||
+        !recipientPhone ||
+        !deliveryAddress ||
+        !postalCode
+      ) {
+        return NextResponse.json(
+          { error: "Missing delivery details." },
+          { status: 400 }
+        );
+      }
     }
 
     const idempotencyKey = `capture-${uuidv4()}`;
@@ -89,20 +137,23 @@ export async function POST(request: NextRequest) {
     const newOrder = await db.order.create({
       data: {
         pricePaidInCents: Math.round(totalAmount * 100),
-        isDelivery: deliveryOption === 'delivery',
+        isDelivery: deliveryOption === "delivery",
         recipientName,
-        deliveryAddress,
-        deliveryInstructions,
-        postalCode,
+
         deliveryDate: new Date(selectedDate),
         deliveryTime: selectedTime,
         transactionId: transactionId,
         idempotencyKey,
-        invoiceNumber:  (await generateInvoiceNumber(uuidv4(), new Date())).toString(),
+        invoiceNumber: (
+          await generateInvoiceNumber(uuidv4(), new Date())
+        ).toString(),
+        taxInCents: Math.round(taxAmount * 100),
         deliveryFeeInCents: Math.round(deliveryFee * 100),
         status: "payment pending",
-        guestEmail: isGuest ? (guestEmail || '') : null, // Only set if guest
-        userId: !isGuest ? extractedUserId : null, // Only set if authenticated
+        guestEmail: isGuestOrder ? guestEmail || "" : null,
+        guestName:  guestName,
+        guestPhone: guestPhone,
+        userId: !isGuestOrder ? extractedUserId : null,
         orderItems: {
           create: cartItems.map((item) => ({
             productId: item.productId,
@@ -110,16 +161,56 @@ export async function POST(request: NextRequest) {
             priceInCents: item.priceInCents,
             subtotalInCents: item.priceInCents * item.quantity,
             description: item.name,
+            type: item.type,
           })),
         },
+        deliveryDetails:
+          deliveryOption === "delivery"
+            ? {
+                create: {
+                  recipientName,
+                  recipientPhone,
+                  deliveryAddress,
+                  postalCode,
+                  deliveryInstructions,
+                  deliveryStatus: "Pending",
+                  deliveryDate: new Date(selectedDate),
+                  deliveryTime: selectedTime,
+                },
+              }
+            : undefined,
       },
     });
 
-    console.log('Order created:', newOrder.id, 'with Idempotency Key:', idempotencyKey);
+    console.log(
+      "Order created:",
+      newOrder.id,
+      "with Idempotency Key:",
+      idempotencyKey
+    );
 
-    return NextResponse.json({ message: 'Order processed successfully', orderId: newOrder.id }, { status: 201 });
+    // Call the print ticket API and handle response
+    const printResponse = await fetch("http://localhost:3000/api/print/onlineTicket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: newOrder.id }),
+    });
+
+    if (!printResponse.ok) {
+      const errorData = await printResponse.json();
+      console.error("Error printing delivery details:", errorData.error);
+    }
+
+    return NextResponse.json(
+      { message: "Order processed successfully", orderId: newOrder.id },
+      { status: 201 }
+    );
+
   } catch (error) {
-    console.error('Error processing order:', error);
-    return NextResponse.json({ error: 'Internal server error.' }, { status: 500 });
+    console.error("Error processing order:", error);
+    return NextResponse.json(
+      { error: "Internal server error." },
+      { status: 500 }
+    );
   }
 }

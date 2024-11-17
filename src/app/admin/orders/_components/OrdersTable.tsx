@@ -15,15 +15,27 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, ChevronDown, MoreHorizontal } from "lucide-react";
+import {
+  ArrowUpDown,
+  ChevronDown,
+  MoreHorizontal,
+  Truck,
+  ShoppingBag,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -44,24 +56,39 @@ import {
   GenerateInvoiceDropdownItem,
   PrintDeliveryDropdownItem,
   PrintReceiptDropdownItem,
+  PrintTicketDropdownItem,
 } from "../_components/OrderActions";
 
-import { Order as PrismaOrder, OrderItem } from "@prisma/client";
+import {
+  Order as PrismaOrder,
+  OrderItem,
+  DeliveryDetails,
+  Product,
+  User,
+  Image,
+} from "@prisma/client";
 
-interface Order extends PrismaOrder {
-  orderItems: OrderItem[];
-  user: {
-    name: string;
-    email: string;
-  } | null;
+import dayjs from "dayjs"; // Import Day.js
+import { FaStore } from "react-icons/fa"; // Imported but not used; consider removing if unnecessary
+
+interface AdminOrder extends PrismaOrder {
+  user: User | null;
+  orderItems: (OrderItem & {
+    product:
+      | (Product & {
+          images: Image[];
+        })
+      | null;
+  })[];
+  deliveryDetails?: DeliveryDetails | null;
 }
 
 interface OrdersTableProps {
-  orders: Order[];
+  orders: AdminOrder[];
 }
 
 type OrderData = {
-  originalOrder: Order;
+  originalOrder: AdminOrder;
   id: string;
   createdAt: string;
   customer: string;
@@ -72,6 +99,7 @@ type OrderData = {
   isDelivery: boolean;
   deliverySchedule: string; // Combined delivery date and time
   deliveryAddress?: string | null; // Optional delivery address
+  notes?: string | null; // New field for notes
   orderItems: {
     quantity: number;
     product?: {
@@ -98,9 +126,16 @@ const getStatusStyles = (status: string): string => {
   }
 };
 
-export const columns: ColumnDef<OrderData>[] = [
-  // Removed the selection column
+// Helper function to get delivery icon
+const getDeliveryIcon = (isDelivery: boolean) => {
+  return isDelivery ? (
+    <Truck className="h-6 w-6 text-gray-700" />
+  ) : (
+    <ShoppingBag className="h-6 w-6 text-gray-700" />
+  );
+};
 
+export const columns: ColumnDef<OrderData>[] = [
   {
     accessorKey: "createdAt",
     header: ({ column }) => (
@@ -113,11 +148,14 @@ export const columns: ColumnDef<OrderData>[] = [
         <ArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
-    cell: ({ row }) => <span>{row.original.createdAt}</span>,
+    cell: ({ row }) => {
+      const date = dayjs(row.original.createdAt);
+      return <span>{date.format("MMM D, 'YY")}</span>; // e.g., "Nov 14, '24"
+    },
     sortingFn: "datetime",
-    size: 30, // Set smaller size
+    size: 30,
     minSize: 30,
-    maxSize: 100,
+    maxSize: 80,
   },
   {
     accessorKey: "customer",
@@ -131,9 +169,9 @@ export const columns: ColumnDef<OrderData>[] = [
       </Button>
     ),
     cell: ({ row }) => <span>{row.original.customer}</span>,
-    size: 80, // Set smaller size
+    size: 80,
     minSize: 50,
-    maxSize: 100,
+    maxSize: 80,
   },
   {
     accessorKey: "items",
@@ -160,9 +198,9 @@ export const columns: ColumnDef<OrderData>[] = [
         ))}
       </ul>
     ),
-    size: 200, // Set smaller size
-    minSize: 150,
-    maxSize: 250,
+    size: 150,
+    minSize: 100,
+    maxSize: 200,
   },
   {
     accessorKey: "totalPrice",
@@ -178,12 +216,32 @@ export const columns: ColumnDef<OrderData>[] = [
     cell: ({ row }) => (
       <span className="text-right">{row.original.totalPrice}</span>
     ),
-    size: 50, // Set smaller size
+    size: 50,
     minSize: 50,
     maxSize: 80,
   },
+  // New "Notes" Column
   {
-    accessorKey: "status",
+    accessorKey: "notes",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        className="w-full text-left"
+      >
+        Notes
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }) => <span>{row.original.notes}</span>,
+    size: 150,
+    minSize: 150,
+    maxSize: 200,
+  },
+  // Combined Status and Delivery Column
+  {
+    id: "statusDelivery",
+    accessorKey: "status", // Using accessorKey for sorting purposes
     header: ({ column }) => (
       <Button
         variant="ghost"
@@ -191,33 +249,23 @@ export const columns: ColumnDef<OrderData>[] = [
         className="w-full text-left"
       >
         Status
-      </Button>
-    ),
-    cell: ({ row }) => (
-      <div className={getStatusStyles(row.original.status)}>
-        {row.original.status}
-      </div>
-    ),
-    size: 120, // Set smaller size
-    minSize: 100,
-    maxSize: 160,
-  },
-  {
-    accessorKey: "deliveryOption",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        className="w-full text-left"
-      >
-        Delivery
         <ArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
-    cell: ({ row }) => <span>{row.original.deliveryOption}</span>,
-    size: 120, // Set smaller size
-    minSize: 100,
-    maxSize: 160,
+    cell: ({ row }) => {
+      const { status, isDelivery } = row.original;
+      return (
+        <div className="flex items-center space-x-2">
+          {getDeliveryIcon(isDelivery)}
+          <div className={getStatusStyles(status)}>
+            {status}
+          </div>
+        </div>
+      );
+    },
+    size: 150,
+    minSize: 120,
+    maxSize: 200,
   },
   {
     accessorKey: "deliverySchedule",
@@ -233,7 +281,7 @@ export const columns: ColumnDef<OrderData>[] = [
     ),
     cell: ({ row }) => row.original.deliverySchedule || "N/A",
     sortingFn: "datetime",
-    size: 150, // Set smaller size
+    size: 150,
     minSize: 120,
     maxSize: 200,
   },
@@ -250,14 +298,14 @@ export const columns: ColumnDef<OrderData>[] = [
       </Button>
     ),
     cell: ({ row }) => row.original.deliveryAddress || "N/A",
-    size: 200, // Set smaller size
+    size: 200,
     minSize: 150,
     maxSize: 250,
   },
   {
     id: "actions",
     enableHiding: false,
-    header: () => null, // No header for actions
+    header: () => null,
     cell: ({ row }) => {
       const orderId = row.original.id;
 
@@ -270,29 +318,86 @@ export const columns: ColumnDef<OrderData>[] = [
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem asChild>
-              <Link href={`/admin/orders/${orderId}/edit`}>Edit</Link>
-            </DropdownMenuItem>
-            <GenerateInvoiceDropdownItem order={row.original.originalOrder} />
-            <DeleteOrderDropdownItem id={orderId} />
-            <DropdownMenuSeparator />
-            <StatusDropdownItem
-              id={orderId}
-              currentStatus={
-                row.original.status as
-                  | "payment pending"
-                  | "in progress"
-                  | "ready to be picked up"
-                  | "picked up"
-              }
-            />
+            {/* Print Subset */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <span>Print</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem asChild>
+                    <GenerateInvoiceDropdownItem
+                      order={row.original.originalOrder}
+                    />
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <PrintTicketDropdownItem orderId={orderId} />
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <PrintDeliveryDropdownItem orderId={orderId} />
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <PrintReceiptDropdownItem orderId={orderId} />
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
 
-            <CaptureTransactionDropdownItem orderId={orderId} />
+            <DropdownMenuSeparator />
+
+            {/* Status Subset */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <span>Status</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  <StatusDropdownItem
+                    id={orderId}
+                    currentStatus={
+                      row.original.status as
+                        | "payment pending"
+                        | "in progress"
+                        | "ready to be picked up"
+                        | "picked up"
+                    }
+                  />
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+
+            <DropdownMenuSeparator />
+
+            {/* Payment Subset */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <span>Payment</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem asChild>
+                    <CaptureTransactionDropdownItem orderId={orderId} />
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+
+            <DropdownMenuSeparator />
+
+            {/* General Actions */}
+            <DropdownMenuGroup>
+              <DropdownMenuItem asChild>
+                <Link href={`/admin/orders/${orderId}/edit`}>Edit</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <DeleteOrderDropdownItem id={orderId} />
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       );
     },
-    size: 50, // Fixed smaller size
+    size: 50,
     minSize: 50,
     maxSize: 50,
   },
@@ -300,9 +405,9 @@ export const columns: ColumnDef<OrderData>[] = [
 
 // Define default column sizing
 const defaultColumnSizing = {
-  size: 50, // Starting column size
-  minSize: 30, // Enforced during column resizing
-  maxSize: 100, // Enforced during column resizing
+  size: 50,
+  minSize: 30,
+  maxSize: 100,
 };
 
 export default function OrdersTable({ orders }: OrdersTableProps) {
@@ -320,8 +425,10 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
         .map(
           (item) =>
             `${item.quantity} x ${
-              item.productId
-                ? `Product ID: ${item.productId}`
+              item.product
+                ? item.product.name ||
+                  item.product.description ||
+                  "Unnamed Product"
                 : item.description || "Custom Item"
             }`
         )
@@ -333,10 +440,23 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
       originalOrder: order,
       deliverySchedule:
         order.deliveryDate && order.deliveryTime
-          ? `${formatDate(new Date(order.deliveryDate))} ${order.deliveryTime}`
+          ? `${dayjs(order.deliveryDate)
+              .hour(parseInt(order.deliveryTime.split(":")[0]))
+              .minute(parseInt(order.deliveryTime.split(":")[1]))
+              .format("ddd, MMM D, h:mm A")}` // e.g., "Nov 18 2:51 PM"
           : "N/A",
-      deliveryAddress: order.deliveryAddress || null, // Ensure it's string | null | undefined
-      orderItems: order.orderItems,
+      deliveryAddress: order.deliveryDetails?.deliveryAddress || null,
+      notes: order.notes || "", // Mapping the notes field
+      orderItems: order.orderItems.map((item) => ({
+        quantity: item.quantity,
+        product: item.product
+          ? {
+              name: item.product.name,
+              description: item.product.description,
+            }
+          : null,
+        description: item.description || null,
+      })),
     }));
   }, [orders]);
 
@@ -345,7 +465,7 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
   const table = useReactTable({
     data,
     columns: columnsMemo,
-    defaultColumn: defaultColumnSizing, // Apply default column sizing
+    defaultColumn: defaultColumnSizing,
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -359,10 +479,10 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
       globalFilter,
       columnVisibility,
     },
-    globalFilterFn: "includesString", // Use built-in includesString filter function
-    onGlobalFilterChange: setGlobalFilter, // Handle global filter changes
-    enableGlobalFilter: true, // Enable global filtering
-    columnResizeMode: "onChange", // Optional: Change to 'onChange' for immediate resizing
+    globalFilterFn: "includesString",
+    onGlobalFilterChange: setGlobalFilter,
+    enableGlobalFilter: true,
+    columnResizeMode: "onChange",
   });
 
   return (

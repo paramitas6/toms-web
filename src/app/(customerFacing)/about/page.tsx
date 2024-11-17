@@ -59,8 +59,7 @@ export default function AboutUsPage() {
               Our Story
             </h2>
             <p className="text-gray-700 mb-4">
-              Founded in 1995, our flower shop has been a labor of love for our family. What started as a small garden in our backyard blossomed into a full-fledged business that brings joy to our community. We believe in the power of flowers to brighten days, celebrate milestones, and express emotions when words fall short.
-            </p>
+            We pride ourselves on offering Toronto's most beautiful blooms. Fresh, elegant, and thoughtfully arranged, our flowers make any occasion special. Our dedication to quality in our flowers will ensure your special moments are unforgettable. Experience the art of fine floristry with every bouquet.       </p>
           </div>
         </div>
 

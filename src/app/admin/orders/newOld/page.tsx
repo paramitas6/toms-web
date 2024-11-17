@@ -26,7 +26,7 @@ export default async function OrderPage({ params }: OrderPageProps) {
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-10">
       <h1 className="text-2xl font-bold mb-4">{order ? 'Edit Order' : 'Create New Order'}</h1>
       <OrderForm order={order} users={users} products={products} />
     </div>

@@ -4,15 +4,13 @@ import db from "@/db/db";
 import { z } from "zod";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import bcrypt from "bcrypt";
 import  { User } from "@prisma/client";
 
 // Schema for user creation
 const addSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  password: z.string().min(8),
-  role: z.enum(["admin", "user"]),
+  phone: z.string().optional(),
 });
 
 // Add User
@@ -24,14 +22,12 @@ export async function addUser(prevState: unknown, formdata: FormData) {
 
   const data = result.data;
 
-  const hashedPassword = await bcrypt.hash(data.password, 10);
-
   await db.user.create({
     data: {
       name: data.name,
       email: data.email,
-      password: hashedPassword,
-      role: data.role,
+      phone: data.phone,
+
     },
   });
 
@@ -58,15 +54,13 @@ export async function updateUser(
   if (!result.success) return result.error.formErrors.fieldErrors;
 
   const data = result.data;
-  let password = data.password ? await bcrypt.hash(data.password, 10) : undefined;
 
   await db.user.update({
     where: { id },
     data: {
       name: data.name,
       email: data.email,
-      password,
-      role: data.role,
+
     },
   });
 

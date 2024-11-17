@@ -10,15 +10,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import db from "@/db/db";
-import { formatNumber, formatCurrency } from "@/lib/formatters";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreVertical } from "lucide-react";
+import { formatNumber } from "@/lib/formatters";
+import UserActionsDropdown from "./_components/UserActionsDropdown";
 
 export default function AdminUsersPage() {
   return (
@@ -43,6 +36,7 @@ async function UsersTable() {
       name: true,
       email: true,
       phone: true,
+      emailVerified: true,
       _count: {
         select: {
           orders: true,
@@ -53,6 +47,7 @@ async function UsersTable() {
       name: "asc",
     },
   });
+
   if (users.length === 0) {
     return <p>No users found</p>;
   }
@@ -64,6 +59,7 @@ async function UsersTable() {
           <TableHead>Name</TableHead>
           <TableHead>Phone</TableHead>
           <TableHead>Email</TableHead>
+          <TableHead>Email Verified</TableHead>
           <TableHead>Orders</TableHead>
           <TableHead className="w-0">
             <span className="sr-only">Actions</span>
@@ -76,27 +72,10 @@ async function UsersTable() {
             <TableCell>{user.name}</TableCell>
             <TableCell>{user.phone}</TableCell>
             <TableCell>{user.email}</TableCell>
+            <TableCell>{user.emailVerified ? "Yes" : "No"}</TableCell>
             <TableCell>{formatNumber(user._count.orders)}</TableCell>
             <TableCell>
-              <DropdownMenu>
-                <DropdownMenuTrigger>
-                  <MoreVertical />
-                  <span className="sr-only">Actions</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/admin/users/${user.id}/edit`}>
-                      Edit
-                    </Link>
-                  </DropdownMenuItem>
-                  <hr></hr>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/admin/users/${user.id}/remove`} className="text-red-500">
-                      REMOVE
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <UserActionsDropdown userId={user.id} />
             </TableCell>
           </TableRow>
         ))}
