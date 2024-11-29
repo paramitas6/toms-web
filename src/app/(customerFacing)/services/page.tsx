@@ -37,7 +37,7 @@ export default function ServicesPage() {
       {/* Background Carousel with Partial Visibility */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <div className="relative w-full h-[50vh]">
-          <CarouselImage />
+          <CarouselImage usedFor="services" />
           {/* Transparent Overlay */}
           <div className="absolute inset-0 bg-black bg-opacity-30 z-10 h-[40vh] flex flex-col justify-center items-center pb-8">
           <h1 className="text-5xl font-gotham text-center text-white tracking-wider p-4">

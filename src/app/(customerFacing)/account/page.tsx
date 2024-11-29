@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import db from "@/db/db";
 import Link from "next/link";
-import { Order, OrderItem } from "@prisma/client";
+import { Order, OrderItem, DeliveryDetails } from "@prisma/client";
 
 const UserPage = async () => {
   // Retrieve the session on the server side
@@ -22,14 +22,16 @@ const UserPage = async () => {
     );
   }
 
-  // Fetch user orders from the database
-  const userEmail = session.user.email;
+  const userId = session.user.id;
+  console.log("User ID:", userId); // Debugging
 
   try {
-    const orders: (Order & { orderItems: OrderItem[] })[] = await db.order.findMany({
-      where: { guestEmail: userEmail },
+    const orders = await db.order.findMany({
+      where: { userId: userId },
       include: {
         orderItems: true,
+        deliveryDetails: true,
+  
       },
       orderBy: {
         createdAt: "desc",
@@ -48,7 +50,22 @@ const UserPage = async () => {
                 <h2 className="text-xl font-semibold">
                   Order placed on {new Date(order.createdAt).toLocaleDateString()}
                 </h2>
-                <p>Status: {order.status}</p>
+                <p>Status: {order.status===("payment pending")&&"Order placed. A florist will confirm and process payment as soon as possible."}</p>
+                <p>Invoice Number: {order.invoiceNumber}</p>
+
+                {/* Display Delivery Details if available */}
+                {order.isDelivery && order.deliveryDetails && (
+                  <div className="mt-2">
+                    <h3 className="font-semibold">Delivery Details:</h3>
+                    <p>Recipient Name: {order.deliveryDetails.recipientName}</p>
+                    <p>Recipient Phone: {order.deliveryDetails.recipientPhone}</p>
+                    <p>Address: {order.deliveryDetails.deliveryAddress}</p>
+                    <p>Postal Code: {order.deliveryDetails.postalCode}</p>
+                    <p>Instructions: {order.deliveryDetails.deliveryInstructions}</p>
+                    <p>Delivery Date: {order.deliveryDetails.deliveryDate ? new Date(order.deliveryDetails.deliveryDate).toLocaleDateString() : "N/A"}</p>
+                    <p>Delivery Time: {order.deliveryDetails.deliveryTime || "N/A"}</p>
+                  </div>
+                )}
 
                 <h3 className="mt-2 font-semibold">Items:</h3>
                 <ul className="list-disc list-inside">

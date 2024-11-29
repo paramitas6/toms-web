@@ -106,7 +106,15 @@ export async function deleteCarouselImage(
 }
 
 // ** New Function to Fetch Carousel Images **
-export async function getCarouselImages() {
+export async function getCarouselImages(usedFor: string) {
+  return db.carouselImage.findMany({
+    where: { isActive: true, usedFor },
+    orderBy: { createdAt: "desc" },
+    take: 10, // Adjust as needed
+  });
+}
+// ** New Function to Fetch All Carousel Images **
+export async function getAllCarouselImages() {
   return db.carouselImage.findMany({
     where: { isActive: true },
     orderBy: { createdAt: "desc" },

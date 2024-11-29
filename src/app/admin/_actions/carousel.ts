@@ -18,6 +18,7 @@ const imageSchema = z
 // Schema for adding a carousel image
 const addCarouselImageSchema = z.object({
   image: imageSchema,
+  usedFor: z.string().optional(),
 });
 
 // Schema for deleting a carousel image
@@ -54,6 +55,7 @@ export async function addCarouselImage(formData: FormData): Promise<AddCarouselI
     data: {
       imageUrl: imagePath,
       isActive: true,
+      usedFor: data.usedFor, // Set the usedFor field
       
     },
   });

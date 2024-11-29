@@ -1,9 +1,12 @@
+// src/app/api/print/receipt/route.ts
+
 import { NextResponse } from "next/server";
 import { fetchOrder } from "@/app/admin/_actions/orders";
-import { Order as PrismaOrder, OrderItem } from "@prisma/client";
 import { join } from "path";
 
 // Helper function to format currency
+
+
 const formatCurrency = (cents: number): string => {
   return (cents / 100).toFixed(2);
 };

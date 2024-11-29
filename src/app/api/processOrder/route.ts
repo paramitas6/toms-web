@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import db from "@/db/db";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
-import { jwtVerify } from "jose";
 import generateInvoiceNumber from "@/lib/generateInvoiceNumber";
-import { PrismaClientValidationError } from "@prisma/client/runtime/library";
-
-const SECRET_KEY = new TextEncoder().encode(
-  process.env.SECRET_KEY || "your_secret_key"
-);
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]/route";
 
 const orderSchema = z.object({
   cartItems: z.array(
@@ -17,6 +13,7 @@ const orderSchema = z.object({
       quantity: z.number().positive(),
       priceInCents: z.number().positive(),
       name: z.string(),
+      size: z.string(),
       type: z.enum(["custom", "product"]),
     })
   ),
@@ -43,44 +40,15 @@ const orderSchema = z.object({
   guestEmail: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
   guestName: z.string().optional(),
   guestPhone: z.string().optional(),
-  userId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
     const body = await request.json();
-    const { isGuest } = body;
 
-    let userId: string | null = null;
-
-    if (!isGuest) {
-      const token = request.cookies.get("auth")?.value;
-
-      if (token) {
-        try {
-          const { payload } = await jwtVerify(token, SECRET_KEY);
-          userId = payload.userId as string;
-        } catch (err) {
-          console.error("JWT verification failed:", err);
-          return NextResponse.json(
-            { error: "Invalid authentication token." },
-            { status: 401 }
-          );
-        }
-      } else {
-        return NextResponse.json(
-          { error: "Authentication token missing." },
-          { status: 401 }
-        );
-      }
-    }
-
-    console.log("Received Order Data:", body); // Log received data for debugging
-
-    const validationResult = orderSchema.safeParse({
-      ...body,
-      userId: userId || undefined,
-    });
+    // Parse and validate the request body
+    const validationResult = orderSchema.safeParse(body);
 
     if (!validationResult.success) {
       console.error(
@@ -111,20 +79,15 @@ export async function POST(request: NextRequest) {
       deliveryFee,
       totalAmount,
       transactionId,
-      isGuest: isGuestOrder,
+      isGuest,
       guestEmail,
       guestName,
       guestPhone,
-      userId: extractedUserId,
     } = validationResult.data;
 
+    // Validate delivery details for delivery option
     if (deliveryOption === "delivery") {
-      if (
-        !recipientName ||
-        !recipientPhone ||
-        !deliveryAddress ||
-        !postalCode
-      ) {
+      if (!recipientName || !recipientPhone || !deliveryAddress || !postalCode) {
         return NextResponse.json(
           { error: "Missing delivery details." },
           { status: 400 }
@@ -132,14 +95,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Determine userId for authenticated users or leave null for guests
+    const userId = session ? session.user.id : null;
+
+    // Check for missing guest details
+    if (isGuest && (!guestEmail || !guestPhone)) {
+      return NextResponse.json(
+        { error: "Guest email and phone are required for guest orders." },
+        { status: 400 }
+      );
+    }
+
     const idempotencyKey = `capture-${uuidv4()}`;
 
+    // Create the order in the database
     const newOrder = await db.order.create({
       data: {
         pricePaidInCents: Math.round(totalAmount * 100),
         isDelivery: deliveryOption === "delivery",
         recipientName,
-
+        category: "online",
         deliveryDate: new Date(selectedDate),
         deliveryTime: selectedTime,
         transactionId: transactionId,
@@ -150,17 +125,19 @@ export async function POST(request: NextRequest) {
         taxInCents: Math.round(taxAmount * 100),
         deliveryFeeInCents: Math.round(deliveryFee * 100),
         status: "payment pending",
-        guestEmail: isGuestOrder ? guestEmail || "" : null,
-        guestName:  guestName,
-        guestPhone: guestPhone,
-        userId: !isGuestOrder ? extractedUserId : null,
+        paymentMethod: "online card",
+        transactionStatus: "pending",
+        guestEmail: isGuest ? guestEmail : null,
+        guestName: isGuest ? guestName : null,
+        guestPhone: isGuest ? guestPhone : null,
+        userId: isGuest ? null : userId, // Use userId for authenticated users, null for guests
         orderItems: {
           create: cartItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
             priceInCents: item.priceInCents,
             subtotalInCents: item.priceInCents * item.quantity,
-            description: item.name,
+            description: item.name + " - " + item.size,
             type: item.type,
           })),
         },
@@ -189,23 +166,10 @@ export async function POST(request: NextRequest) {
       idempotencyKey
     );
 
-    // Call the print ticket API and handle response
-    const printResponse = await fetch("http://localhost:3000/api/print/onlineTicket", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId: newOrder.id }),
-    });
-
-    if (!printResponse.ok) {
-      const errorData = await printResponse.json();
-      console.error("Error printing delivery details:", errorData.error);
-    }
-
     return NextResponse.json(
       { message: "Order processed successfully", orderId: newOrder.id },
       { status: 201 }
     );
-
   } catch (error) {
     console.error("Error processing order:", error);
     return NextResponse.json(

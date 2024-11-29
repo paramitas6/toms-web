@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 datasource db {
   provider = "sqlite" // Specify SQLite as the provider
   url      = env("DATABASE_URL") // Use the DATABASE_URL from your .env file
@@ -13,15 +15,26 @@ model Product {
   description            String
   careguide              String
   category               String
-  priceInCents           Int
   imagePath              String
+  priceInCents           Int?
   isAvailableForPurchase Boolean           @default(true)
-  stock                  Int               @default(0) // Default stock set to 0
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
   images                 Image[]
   orderItems             OrderItem[]
   featuredProducts       FeaturedProduct[] // Updated relation name to match new model name
+  sizes                  ProductVariant[] // Relation to the ProductVariant model
+}
+
+model ProductVariant {
+  id           String   @id @default(uuid())
+  size         String // e.g., "Small", "Medium", "Large"
+  priceInCents Int // Price specific to this size
+  productId    String
+  orderItems   OrderItem[] // Relation to OrderItem
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model FeaturedProduct {
@@ -77,31 +90,33 @@ model VerificationToken {
 }
 
 model Order {
-  id                 String   @id @default(uuid())
-  invoiceNumber      String?  @unique
-  pricePaidInCents   Int
+  id                 String           @id @default(uuid())
+  invoiceNumber      String?          @unique
+
   deliveryFeeInCents Int?
   taxInCents         Int?
+
+  pricePaidInCents   Int
   category           String?
   userId             String?
-  user               User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
   guestEmail         String?
   guestName          String?
   guestPhone         String?
   recipientName      String?
-  isDelivery         Boolean? @default(false)
-  paymentMethod     String?
-  transactionId     String?
-  transactionStatus String?
-  idempotencyKey    String?
-  notes             String? // Store additional notes
-  deliveryDate      DateTime? // Store selected delivery dat
-  deliveryTime      String? // Store selected time window
-  status            String
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  orderItems        OrderItem[]
-  deliveryDetails   DeliveryDetails?
+  isDelivery         Boolean?         @default(false)
+  paymentMethod      String?
+  transactionId      String?
+  transactionStatus  String?
+  idempotencyKey     String?
+  notes              String? // Store additional notes
+  deliveryDate       DateTime? // Store selected delivery dat
+  deliveryTime       String? // Store selected time window
+  status             String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  orderItems         OrderItem[]
+  deliveryDetails    DeliveryDetails?
 }
 
 model DeliveryDetails {
@@ -140,6 +155,7 @@ model OrderItem {
   id              String   @id @default(uuid())
   orderId         String
   productId       String?
+  ProductVariantId   String? // New field to link to a specific size
   description     String?
   type            String? // "product" or "custom"
   priceInCents    Int
@@ -148,6 +164,7 @@ model OrderItem {
   cardMessage     String? // Store personalized card message
   order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product         Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  ProductVariant     ProductVariant? @relation(fields: [ProductVariantId], references: [id], onDelete: Restrict) // Relation to ProductVariant
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

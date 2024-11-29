@@ -36,7 +36,7 @@ export default async function OrderPage({ params }: OrderPageProps) {
   return (
     <div className="container mx-auto p-4 md:p-0 md:m-0">
       <h1 className="text-3xl font-montserrat m-4 sm:text-5xl">{order ? 'Edit Order' : 'New Order'}</h1>
-      <QuickOrder order={order} users={users} />
+      <QuickOrder order={order} users={users} products={products} />
     </div>
   );
 }

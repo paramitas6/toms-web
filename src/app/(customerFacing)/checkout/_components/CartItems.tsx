@@ -65,7 +65,9 @@ const CartItem: React.FC<CartItemProps> = ({
 
       {/* Product Info */}
       <div className="md:pl-6 mt-4 md:mt-0 flex flex-col justify-between h-full  w-full font-montserrat">
-        <h2 className="text-xl font-oSans text-black">{cartItem.name}</h2>
+        <h2 className="text-4xl font-oSans text-black">{cartItem.name}</h2>
+        <h2 className="text-xl font-oSans text-gray-700">{cartItem.size}</h2>
+
         <div className="flex flex-grow"></div>
 
         {/* Display or Edit the card message */}

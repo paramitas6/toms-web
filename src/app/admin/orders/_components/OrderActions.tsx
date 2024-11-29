@@ -88,6 +88,7 @@ export function StatusDropdownItem({
   );
 }
 
+
 export function PrintReceiptDropdownItem({ orderId }: { orderId: string }) {
   const handlePrintReceipt = async () => {
     await fetch("/api/print/receipt", {
@@ -176,7 +177,7 @@ export function CaptureTransactionDropdownItem({
     const checkTransactionStatus = async () => {
       try {
         const status = await fetchTransactionStatus(orderId);
-        console.log(status);
+   
         setIsPaid(status.transactionStatus === "Paid");
         setIsDelivery(status.isDelivery === true);
       } catch (error) {
@@ -215,7 +216,7 @@ export function CaptureTransactionDropdownItem({
         disabled={isPaid || isLoading}
         className={isPaid ? "text-gray-400 cursor-not-allowed" : ""}
       >
-        {isPaid ? "Payment Already Processed" : "Process Payment"}
+        {isPaid ? "Payment Already Processed" : "Process Online Payment"}
       </DropdownMenuItem>
 
     </>

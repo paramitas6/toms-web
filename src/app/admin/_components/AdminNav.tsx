@@ -65,7 +65,13 @@ export default function AdminLayout() {
         <div className="flex-1 flex flex-col py-10">
           <Nav lightmode={false} direction="col">
             {/* Primary Links */}
-
+            <NavLink
+              href="/admin/calendar"
+              className="flex flex-row space-x-3 justify-start  py-2  rounded hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
+            >
+              <FaColumns className="text-xl" />
+              <span>Calendar</span>
+            </NavLink>
             <NavLink
               href="/admin/orders"
               className="flex flex-row space-x-3  justify-start  py-2 rounded hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
@@ -129,13 +135,7 @@ export default function AdminLayout() {
               <span>Images</span>
             </NavLink>
 
-            <NavLink
-              href="/admin/calendar"
-              className="flex flex-row space-x-3 justify-start  py-2  rounded hover:bg-gray-700 focus:bg-gray-700 focus:outline-none"
-            >
-              <FaColumns className="text-xl" />
-              <span>Calendar</span>
-            </NavLink>
+
           </Nav>
         </div>
       </aside>

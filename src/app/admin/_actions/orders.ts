@@ -3,6 +3,7 @@
 
 import db from "@/db/db";
 import { z } from "zod";
+import fs from "fs/promises";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { v4 as uuid } from "uuid";
@@ -10,8 +11,6 @@ import { User, Order } from "@prisma/client";
 import crypto from "crypto";
 import { ExtendedOrder } from "@/types/ExtendedOrder";
 import dayjs from "dayjs";
-
-
 
 /**
  * Generates a random 9-digit invoice number based on the order ID and creation time.
@@ -26,14 +25,13 @@ async function generateRandomInvoiceNumber(
   const input = `${orderId}-${createdAt.getTime()}`;
   const hash = crypto.createHash("sha256").update(input).digest("hex");
   const hashInteger = parseInt(hash.slice(0, 9), 16);
-  return Number(hashInteger % 1e9)
-    .toString()
-    .padStart(9, "0");
+  return (hashInteger % 1e9).toString().padStart(9, "0");
 }
 
-// Updated OrderItem Schema to include new fields
+// Updated OrderItem Schema to include productVariantId
 const orderItemSchema = z.object({
   productId: z.string().uuid().optional(),
+  productVariantId: z.string().uuid().optional(),
   priceInCents: z
     .union([z.coerce.number().int().min(1), z.literal(null)])
     .nullable(),
@@ -43,7 +41,7 @@ const orderItemSchema = z.object({
   cardMessage: z.string().optional(), // Personalized card message
 });
 
-// Updated Add Order Schema to include new fields
+// Updated Add Order Schema to include new fields and productVariantId
 const addOrderSchema = z.object({
   userId: z.string().uuid().optional(),
   isDelivery: z.coerce.boolean(),
@@ -75,65 +73,6 @@ const captureTransactionSchema = z.object({
   amount: z.number().positive(),
 });
 
-export async function captureTransaction(orderId: string) {
-  const ipAddress = "192.168.1.1";
-  const apiToken = process.env.HELCIM_API_TOKEN;
-
-  try {
-    // Fetch the order from the database to get the transactionId and amount
-    const order = await db.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (
-      !order ||
-      !order.transactionId ||
-      !order.idempotencyKey ||
-      !order.pricePaidInCents
-    ) {
-      throw new Error("Order not found or transactionId/amount missing.");
-    }
-
-    const transactionId = order.transactionId;
-    const amount = order.pricePaidInCents / 100; // Convert cents to dollars
-    const idempotencyKey = order.idempotencyKey.slice(0, 25);
-    const response = await fetch("https://api.helcim.com/v2/payment/capture", {
-      method: "POST",
-      headers: new Headers({
-        accept: "application/json",
-        "content-type": "application/json",
-        "idempotency-key": idempotencyKey,
-        "api-token": apiToken || "",
-      }),
-      body: JSON.stringify({
-        amount,
-        ipAddress,
-        preAuthTransactionId: transactionId,
-      }),
-    });
-
-    const result = await response.json();
-
-    if (result.status === "APPROVED") {
-      await db.order.update({
-        where: { id: orderId },
-        data: {
-          transactionStatus: "Paid",
-          idempotencyKey,
-        },
-      });
-      console.log(
-        `Transaction captured successfully: ${JSON.stringify(result)}`
-      );
-    } else {
-      throw new Error(`Transaction capture failed: ${JSON.stringify(result)}`);
-    }
-  } catch (error) {
-    console.error("Error capturing transaction:", error);
-    throw new Error("Transaction capture failed.");
-  }
-}
-
 /**
  * Adds a new order to the database along with associated order items and delivery details.
  * @param prevState - Previous state (not used here).
@@ -141,17 +80,24 @@ export async function captureTransaction(orderId: string) {
  * @returns The newly created order.
  */
 export async function addOrder(prevState: unknown, formData: FormData) {
-  const entries = Object.fromEntries(formData.entries());
+  const entries = Array.from(formData.entries());
 
-  // Parse orderItems
-  const orderItemsEntries = Object.entries(entries).filter(([key]) =>
-    key.startsWith("orderItems[")
-  );
+  // Parse formData without using for...of
+  const parsedEntries: { [key: string]: any } = {};
+  const variants: { size: string; priceInCents: number }[] = [];
 
-  // Reconstruct orderItems array
+  for (let i = 0; i < entries.length; i++) {
+    const [key, value] = entries[i];
+    parsedEntries[key] = value;
+  }
+
+  // Extract orderItems
   const orderItemsMap: { [index: string]: any } = {};
-  for (const [key, value] of orderItemsEntries) {
-    const match = key.match(/orderItems\[(\d+)\]\[(.+)\]/);
+  const variantRegex = /^orderItems\[(\d+)\]\[(productId|productVariantId|priceInCents|quantity|type|description|cardMessage)\]$/;
+
+  for (let i = 0; i < entries.length; i++) {
+    const [key, value] = entries[i];
+    const match = key.match(variantRegex);
     if (match) {
       const index = match[1];
       const field = match[2];
@@ -166,9 +112,9 @@ export async function addOrder(prevState: unknown, formData: FormData) {
 
   // Combine entries with orderItems
   const data = {
-    ...entries,
+    ...parsedEntries,
     orderItems,
-    isDelivery: entries.isDelivery === "true", // Ensure isDelivery is a boolean
+    isDelivery: parsedEntries.isDelivery === "true", // Ensure isDelivery is a boolean
   };
 
   const result = addOrderSchema.safeParse(data);
@@ -211,48 +157,71 @@ export async function addOrder(prevState: unknown, formData: FormData) {
         .millisecond(0) // Zero out milliseconds
         .format("h:mm A"); // Format as HH:mm
 
-
-
   // **Calculate subtotal from order items**
   let subtotalInCents = 0;
   const orderItemsToCreate: any[] = [];
-  for (const itemData of orderItemsData) {
-    if (itemData.productId) {
-      const product = await db.product.findUnique({
-        where: { id: itemData.productId },
+  for (let i = 0; i < orderItemsData.length; i++) {
+    const itemData = orderItemsData[i];
+  
+    if (itemData.productId && itemData.productVariantId) {
+      // Handle regular product variants
+      const variant = await db.productVariant.findUnique({
+        where: { id: itemData.productVariantId },
+        include: { product: true },
       });
-      if (!product) {
-        console.warn(
-          `Product with ID ${itemData.productId} not found. Skipping.`
-        );
-        continue; // Skip invalid products
+      if (!variant) {
+        console.warn(`Variant with ID ${itemData.productVariantId} not found. Skipping.`);
+        continue;
       }
-
-      const subtotal = product.priceInCents * itemData.quantity;
+  
+      const subtotal = variant.priceInCents * Number(itemData.quantity);
       subtotalInCents += subtotal;
-
+  
       orderItemsToCreate.push({
-        productId: product.id,
-        quantity: itemData.quantity,
+        product: { connect: { id: variant.productId } },
+        ProductVariant: { connect: { id: variant.id } },
+        quantity: Number(itemData.quantity),
         subtotalInCents: subtotal,
-        priceInCents: product.priceInCents,
-        type: "product",
+        priceInCents: variant.priceInCents,
+        type: itemData.type || "product",
         cardMessage: itemData.cardMessage || "",
       });
-    } else {
+    } else if (!itemData.productId && !itemData.productVariantId) {
+      // Handle custom items
+      if (!itemData.priceInCents) {
+        console.warn("Custom order item missing priceInCents. Skipping.");
+        continue;
+      }
+  
+      const subtotal = Number(itemData.priceInCents) * Number(itemData.quantity);
+      subtotalInCents += subtotal;
+  
+      orderItemsToCreate.push({
+        ProductVariantId: null,
+        quantity: Number(itemData.quantity),
+        subtotalInCents: subtotal,
+        priceInCents: Number(itemData.priceInCents),
+        type: itemData.type || "custom",
+        description: itemData.description || "",
+        cardMessage: itemData.cardMessage || "",
+      });
+    }
+     else {
       // Handle custom order items
       if (!itemData.priceInCents) {
         console.warn("Custom order item missing priceInCents. Skipping.");
         continue; // Skip items without price
       }
 
-      const subtotal = itemData.priceInCents * itemData.quantity;
+      const subtotal = Number(itemData.priceInCents) * Number(itemData.quantity);
       subtotalInCents += subtotal;
+
       orderItemsToCreate.push({
-        productId: null,
-        quantity: itemData.quantity,
+        product: null,
+        ProductVariant: null,
+        quantity: Number(itemData.quantity),
         subtotalInCents: subtotal,
-        priceInCents: itemData.priceInCents,
+        priceInCents: Number(itemData.priceInCents),
         type: itemData.type || "custom",
         description: itemData.description || "",
         cardMessage: itemData.cardMessage || "",
@@ -263,7 +232,6 @@ export async function addOrder(prevState: unknown, formData: FormData) {
   // **Calculate tax**
   const includeTax = true; // Adjust based on your business logic or make it dynamic
   const taxInCents = includeTax ? Math.round(subtotalInCents * 0.13) : 0;
-
 
   // **Calculate total price**
   const pricePaidInCents = subtotalInCents + taxInCents;
@@ -283,8 +251,8 @@ export async function addOrder(prevState: unknown, formData: FormData) {
       transactionId,
       idempotencyKey,
       notes,
-      deliveryDate: finalDeliveryDate,
-      deliveryTime: finalDeliveryTime,
+      deliveryDate:  finalDeliveryDate ,
+      deliveryTime:  finalDeliveryTime ,
       orderItems: {
         create: orderItemsToCreate,
       },
@@ -336,17 +304,24 @@ export async function updateOrder(
   prevState: unknown,
   formData: FormData
 ) {
-  const entries = Object.fromEntries(formData.entries());
+  const entries = Array.from(formData.entries());
 
-  // Parse orderItems
-  const orderItemsEntries = Object.entries(entries).filter(([key]) =>
-    key.startsWith("orderItems[")
-  );
+  // Parse formData without using for...of
+  const parsedEntries: { [key: string]: any } = {};
+  const variants: { size: string; priceInCents: number }[] = [];
 
-  // Reconstruct orderItems array
+  for (let i = 0; i < entries.length; i++) {
+    const [key, value] = entries[i];
+    parsedEntries[key] = value;
+  }
+
+  // Extract orderItems
   const orderItemsMap: { [index: string]: any } = {};
-  for (const [key, value] of orderItemsEntries) {
-    const match = key.match(/orderItems\[(\d+)\]\[(.+)\]/);
+  const variantRegex = /^orderItems\[(\d+)\]\[(productId|productVariantId|priceInCents|quantity|type|description|cardMessage)\]$/;
+
+  for (let i = 0; i < entries.length; i++) {
+    const [key, value] = entries[i];
+    const match = key.match(variantRegex);
     if (match) {
       const index = match[1];
       const field = match[2];
@@ -361,9 +336,9 @@ export async function updateOrder(
 
   // Combine entries with orderItems
   const data = {
-    ...entries,
+    ...parsedEntries,
     orderItems,
-    isDelivery: entries.isDelivery === "true", // Ensure isDelivery is a boolean
+    isDelivery: parsedEntries.isDelivery === "true", // Ensure isDelivery is a boolean
   };
 
   const result = editOrderSchema.safeParse(data);
@@ -376,8 +351,8 @@ export async function updateOrder(
     userId,
     isDelivery,
     status,
-    recipientName,
     deliveryFeeInCents,
+    recipientName,
     deliveryAddress,
     deliveryInstructions,
     postalCode,
@@ -393,32 +368,57 @@ export async function updateOrder(
     idempotencyKey,
   } = result.data;
 
-  // Calculate total price
-  let pricePaidInCents = 0;
+  // **Calculate subtotal from order items**
+  let subtotalInCents = 0;
   const orderItemsToCreate: any[] = [];
-  for (const itemData of orderItemsData) {
-    if (itemData.productId) {
+  for (let i = 0; i < orderItemsData.length; i++) {
+    const itemData = orderItemsData[i];
+    if (itemData.productId && itemData.productVariantId) {
+      const variant = await db.productVariant.findUnique({
+        where: { id: itemData.productVariantId },
+        include: { product: true },
+      });
+      if (!variant) {
+        console.warn(
+          `Variant with ID ${itemData.productVariantId} not found. Skipping.`
+        );
+        continue; // Skip invalid variants
+      }
+
+      const subtotal = variant.priceInCents * Number(itemData.quantity);
+      subtotalInCents += subtotal;
+
+      orderItemsToCreate.push({
+        product: { connect: { id: variant.productId } },
+        ProductVariant: { connect: { id: variant.id } },
+        quantity: Number(itemData.quantity),
+        subtotalInCents: subtotal,
+        priceInCents: variant.priceInCents,
+        type: itemData.type || "product",
+        cardMessage: itemData.cardMessage || "",
+      });
+    } else if (itemData.productId) {
+      // If productId is present but no variant, handle accordingly
       const product = await db.product.findUnique({
         where: { id: itemData.productId },
       });
       if (!product) {
-        console.warn(
-          `Product with ID ${itemData.productId} not found. Skipping.`
-        );
+        console.warn(`Product with ID ${itemData.productId} not found. Skipping.`);
         continue; // Skip invalid products
       }
 
-      const subtotalInCents = product.priceInCents * itemData.quantity;
-      pricePaidInCents += subtotalInCents;
+      const subtotal = product.priceInCents||0 * Number(itemData.quantity);
+      subtotalInCents += subtotal;
 
       orderItemsToCreate.push({
-        productId: product.id,
-        quantity: itemData.quantity,
-        subtotalInCents,
+        product: { connect: { id: product.id } },
+        productVariant: null,
+        quantity: Number(itemData.quantity),
+        subtotalInCents: subtotal,
         priceInCents: product.priceInCents,
         type: "product",
         cardMessage: itemData.cardMessage || "",
-      });
+      });      
     } else {
       // Handle custom order items
       if (!itemData.priceInCents) {
@@ -426,14 +426,15 @@ export async function updateOrder(
         continue; // Skip items without price
       }
 
-      const subtotalInCents = itemData.priceInCents * itemData.quantity;
-      pricePaidInCents += subtotalInCents;
+      const subtotal = Number(itemData.priceInCents) * Number(itemData.quantity);
+      subtotalInCents += subtotal;
 
       orderItemsToCreate.push({
         productId: null,
-        quantity: itemData.quantity,
-        subtotalInCents,
-        priceInCents: itemData.priceInCents,
+        productVariant: null,
+        quantity: Number(itemData.quantity),
+        subtotalInCents: subtotal,
+        priceInCents: Number(itemData.priceInCents),
         type: itemData.type || "custom",
         description: itemData.description || "",
         cardMessage: itemData.cardMessage || "",
@@ -441,14 +442,21 @@ export async function updateOrder(
     }
   }
 
-  pricePaidInCents = Math.round(pricePaidInCents * 1.13); // Add 13% tax and round
+  // **Calculate tax**
+  const includeTax = true; // Adjust based on your business logic or make it dynamic
+  const taxInCents = includeTax ? Math.round(subtotalInCents * 0.13) : 0;
 
-  // Update the order
+  // **Calculate total price**
+  const pricePaidInCents = subtotalInCents + taxInCents;
+
+  // **Update the order along with delivery details if applicable**
   const updatedOrder = await db.order.update({
     where: { id },
     data: {
       userId,
       pricePaidInCents,
+      deliveryFeeInCents, // Add delivery fee if applicable
+      taxInCents,
       isDelivery,
       status,
       guestEmail,
@@ -457,8 +465,8 @@ export async function updateOrder(
       transactionId,
       idempotencyKey,
       notes,
-      deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
-      deliveryTime,
+      deliveryDate: isDelivery ? (deliveryDate ? dayjs(deliveryDate).toDate() : null) : null,
+      deliveryTime: isDelivery ? deliveryTime : null,
       // Update deliveryDetails if isDelivery is true
       deliveryDetails: isDelivery
         ? {
@@ -469,7 +477,7 @@ export async function updateOrder(
                 deliveryAddress,
                 deliveryInstructions,
                 deliveryStatus: "Pending", // Or another logic to set status
-                deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+                deliveryDate: deliveryDate ? dayjs(deliveryDate).toDate() : null,
                 deliveryTime,
               },
               create: {
@@ -478,7 +486,7 @@ export async function updateOrder(
                 deliveryAddress,
                 deliveryInstructions,
                 deliveryStatus: "Pending",
-                deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+                deliveryDate: deliveryDate ? dayjs(deliveryDate).toDate() : null,
                 deliveryTime,
               },
             },
@@ -489,7 +497,7 @@ export async function updateOrder(
     },
   });
 
-  // Delete existing order items and recreate them
+  // **Delete existing order items and recreate them**
   await db.orderItem.deleteMany({
     where: { orderId: id },
   });
@@ -502,9 +510,10 @@ export async function updateOrder(
     })),
   });
 
-  // Revalidate and redirect
+  // **Revalidate paths and redirect**
   revalidatePath("/admin/orders");
   redirect("/admin/orders");
+  return updatedOrder;
 }
 
 /**
@@ -512,9 +521,21 @@ export async function updateOrder(
  * @param id - The ID of the order to delete.
  */
 export async function deleteOrder(id: string) {
-  await db.order.delete({
-    where: { id },
+  const order = await db.order.delete({
+    where: {
+      id,
+    },
+    include: {
+      orderItems: true,
+      deliveryDetails: true,
+    },
   });
+
+  if (!order) {
+    return notFound();
+  }
+
+  // Optionally, handle any cleanup if necessary
 
   revalidatePath("/admin/orders");
   redirect("/admin/orders");
@@ -556,7 +577,7 @@ export async function changeOrderStatus(id: string, newStatus: string) {
 
 /**
  * Fetches a single order by its ID, including related order items and delivery details.
- * @param id - The ID of the order to fetch.
+ * @param orderId - The ID of the order to fetch.
  * @returns The order with related data or triggers a notFound response.
  */
 export async function fetchOrder(orderId: string): Promise<ExtendedOrder | null> {
@@ -571,6 +592,7 @@ export async function fetchOrder(orderId: string): Promise<ExtendedOrder | null>
               images: true,
             },
           },
+          ProductVariant: true,
         },
       },
       deliveryDetails: true,
@@ -633,6 +655,7 @@ export async function fetchOrders(customerId?: string): Promise<Order[]> {
       orderItems: {
         include: {
           product: true,
+          ProductVariant: true,
         },
       },
       deliveryDetails: true, // Include delivery details
@@ -679,9 +702,70 @@ export async function fetchOrderById(orderId: string): Promise<Order | null> {
       orderItems: {
         include: {
           product: true,
+          ProductVariant: true,
         },
       },
       deliveryDetails: true, // Include delivery details
     },
   });
 }
+
+export async function captureTransaction(orderId: string) {
+  const ipAddress = "192.168.1.1";
+  const apiToken = process.env.HELCIM_API_TOKEN;
+
+  try {
+    // Fetch the order from the database to get the transactionId and amount
+    const order = await db.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (
+      !order ||
+      !order.transactionId ||
+      !order.idempotencyKey ||
+      !order.pricePaidInCents
+    ) {
+      throw new Error("Order not found or transactionId/amount missing.");
+    }
+
+    const transactionId = order.transactionId;
+    const amount = order.pricePaidInCents / 100; // Convert cents to dollars
+    const idempotencyKey = order.idempotencyKey.slice(0, 25);
+    const response = await fetch("https://api.helcim.com/v2/payment/capture", {
+      method: "POST",
+      headers: new Headers({
+        accept: "application/json",
+        "content-type": "application/json",
+        "idempotency-key": idempotencyKey,
+        "api-token": apiToken || "",
+      }),
+      body: JSON.stringify({
+        amount,
+        ipAddress,
+        preAuthTransactionId: transactionId,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.status === "APPROVED") {
+      await db.order.update({
+        where: { id: orderId },
+        data: {
+          transactionStatus: "Paid",
+          idempotencyKey,
+        },
+      });
+      console.log(
+        `Transaction captured successfully: ${JSON.stringify(result)}`
+      );
+    } else {
+      throw new Error(`Transaction capture failed: ${JSON.stringify(result)}`);
+    }
+  } catch (error) {
+    console.error("Error capturing transaction:", error);
+    throw new Error("Transaction capture failed.");
+  }
+}
+

@@ -9,7 +9,9 @@ import { v4 as uuidv4 } from "uuid";
 export interface CartItem {
   id: string;
   productId: string;
+  variantId: string;
   name: string;
+  size: string;
   priceInCents: number;
   image: string;
   quantity: number;
@@ -66,6 +68,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   function areItemsEqual(item1: CartItem, item2: CartItem) {
     return (
       item1.productId === item2.productId &&
+      item1.variantId === item2.variantId &&
       item1.cardMessage === item2.cardMessage &&
       item1.deliveryInstructions === item2.deliveryInstructions
     );

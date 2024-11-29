@@ -36,6 +36,7 @@ const getFeaturedProducts = cache1(
       where: { isAvailableForPurchase: true, featuredProducts: { some: {} } },
       orderBy: { createdAt: "desc" },
       take: 12,
+      include: { sizes: true }, // Include sizes in the product object
     });
   },
   ["/shop", "getFeaturedProducts"],

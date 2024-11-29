@@ -1,5 +1,10 @@
 "use client";
-
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +19,7 @@ import {
   User,
   OrderItem,
   DeliveryDetails,
+  Product,
 } from "@prisma/client";
 import {
   Select,
@@ -43,7 +49,9 @@ import {
 } from "@/components/ui/dialog"; // Adjust the path as needed
 import Link from "next/link";
 import { FaAd, FaPlus } from "react-icons/fa";
+import { set } from "date-fns";
 
+import ChangeCalculatorModal from "./ChangeCalculatorModal";
 interface Order extends PrismaOrder {
   orderItems: OrderItem[];
   includeTax: boolean;
@@ -53,11 +61,14 @@ interface Order extends PrismaOrder {
 interface OrderFormProps {
   order?: Order | null;
   users: User[];
+  products: (Product & {
+    sizes: { id: string; size: string; priceInCents: number }[];
+  })[]; // Added sizes to Product
 }
 
-const ORIGIN_POSTAL_CODE = "M5A"; // Replace with your store's origin postal code prefix
+export default function QuickOrder({ order, users, products }: OrderFormProps) {
+  const [isChangeCalculatorOpen, setIsChangeCalculatorOpen] = useState(false);
 
-export default function QuickOrder({ order, users }: OrderFormProps) {
   const [error, action] = useFormState(
     order == null ? addOrder : updateOrder.bind(null, order.id),
     {}
@@ -71,6 +82,10 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
     order?.status || "payment pending"
   );
   const [notes, setNotes] = useState<string>(order?.notes || "");
+
+  const [paymentMethod, setPaymentMethod] = useState<string>(
+    order?.paymentMethod || "cash"
+  );
   const [postalCode, setPostalCode] = useState<string>(
     order?.deliveryDetails?.postalCode || ""
   );
@@ -102,8 +117,9 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
       id: item.id,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
-      type: item.productId ? "product" : "custom",
-      productId: item.productId,
+      type: item.type || "custom", // Ensure type is correctly initialized
+      productId: item.productId || null,
+      ProductVariantId: item.ProductVariantId || null, // Initialize ProductVariantId
       description: item.description || "",
       quantity: item.quantity,
       priceInCents: item.priceInCents,
@@ -112,17 +128,18 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
       orderId: item.orderId,
     })) || [
       {
-        id: "",
+        id: uuidv4(),
         createdAt: new Date(),
         updatedAt: new Date(),
         type: "custom",
         productId: null,
+        ProductVariantId: null, // Initialize ProductVariantId
         description: "",
         quantity: 1,
         priceInCents: 0,
         cardMessage: null,
         subtotalInCents: 0,
-        orderId: "",
+        orderId: order?.id || "",
       },
     ]
   );
@@ -171,6 +188,7 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
         updatedAt: new Date(),
         type: "custom",
         productId: null,
+        ProductVariantId: null, // Initialize ProductVariantId
         description: "",
         quantity: 1,
         priceInCents: 0,
@@ -194,6 +212,30 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
       const newItems = [...prev];
       const currentItem = { ...newItems[index], [field]: value };
 
+      // If changing the product, reset the variant and price
+      if (field === "productId") {
+        currentItem.ProductVariantId = null;
+        currentItem.priceInCents = 0;
+      }
+
+      // If changing the variant, update the price
+      if (field === "ProductVariantId") {
+        const selectedVariant = products
+          .find((p) => p.id === currentItem.productId)
+          ?.sizes.find((variant) => variant.id === value);
+
+        if (selectedVariant) {
+          currentItem.priceInCents = selectedVariant.priceInCents;
+        } else {
+          currentItem.priceInCents = 0;
+        }
+
+        // Recalculate subtotal
+        currentItem.subtotalInCents =
+          currentItem.priceInCents * currentItem.quantity;
+      }
+
+      // If changing quantity or price, recalculate subtotal
       if (field === "priceInCents" || field === "quantity") {
         currentItem.subtotalInCents =
           currentItem.priceInCents * currentItem.quantity;
@@ -218,7 +260,7 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
     setFeeError(null);
 
     // Validate postal codes
-    const originPostal = ORIGIN_POSTAL_CODE;
+    const originPostal = "M5N";
     const destinationPostal = postalCode.slice(0, 3).toUpperCase(); // Ensure 3-character prefix
 
     if (originPostal.length !== 3 || destinationPostal.length !== 3) {
@@ -259,6 +301,7 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
       updatedAt: new Date(),
       type: "delivery",
       productId: null,
+      ProductVariantId: null,
       description: "Delivery Fee",
       quantity: 1,
       priceInCents: deliveryFee * 100, // Assuming deliveryFee is in currency units
@@ -274,6 +317,11 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    if (paymentMethod === "cash") {
+      setIsChangeCalculatorOpen(true);
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
 
     orderItems.forEach((item, index) => {
@@ -284,6 +332,18 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
         `orderItems[${index}][priceInCents]`,
         item.priceInCents.toString()
       );
+
+      // Set ProductVariantId if type is 'product'
+      if (item.type === "product" && item.ProductVariantId) {
+        formData.set(
+          `orderItems[${index}][ProductVariantId]`,
+          item.ProductVariantId
+        );
+        formData.set(`orderItems[${index}][productId]`, item.productId!);
+      } else {
+        formData.delete(`orderItems[${index}][ProductVariantId]`);
+        formData.delete(`orderItems[${index}][productId]`);
+      }
     });
 
     formData.set("subtotalInCents", subtotalInCents.toString());
@@ -305,6 +365,7 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
     if (isDelivery) {
       formData.set("recipientName", recipientName);
       formData.set("recipientPhone", recipientPhone);
+      formData.set("paymentMethod", paymentMethod);
       formData.set("deliveryAddress", deliveryAddress);
       formData.set("postalCode", postalCode);
       formData.set("deliveryInstructions", deliveryInstructions);
@@ -327,6 +388,7 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
       formData.set("deliveryTime", finalDeliveryTime);
     } else {
       formData.delete("recipientName");
+      formData.delete("paymentMethod");
       formData.delete("recipientPhone");
       formData.delete("deliveryAddress");
       formData.delete("postalCode");
@@ -392,8 +454,8 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
         {/* Customer and Order Status Section */}
         <div className="flex flex-col md:flex-row w-full space-y-4 md:space-y-2 md:space-x-2 md:m-0">
           {/* Order Items Section */}
-          <div className="flex p-2  w-full md:w-2/4">
-            <div className="flex flex-col space-y-4 w-full">
+          <div className="flex p-2 w-full md:w-2/4">
+            <div className="flex flex-col space-y-4 w-full gamja1">
               <div className="flex justify-between">
                 <Label className="text-lg font-semibold">Sale Items</Label>
                 <Button
@@ -433,8 +495,9 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
                     />
                   </div>
 
-                  {/* Type, Quantity and Unit Price */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Type, Product, Variant, Quantity and Unit Price */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Type */}
                     <div className="space-y-2">
                       <Label htmlFor={`orderItems[${index}][type]`}>Type</Label>
                       <Select
@@ -451,36 +514,76 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
                         <SelectContent>
                           <SelectItem value="product">Product</SelectItem>
                           <SelectItem value="custom">Custom</SelectItem>
-                          <SelectItem value="delivery">
-                            Delivery
-                          </SelectItem>{" "}
-                          {/* Added delivery type */}
+                          <SelectItem value="delivery">Delivery</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor={`orderItems[${index}][priceInCents]`}>
-                        Price (in cents)
-                      </Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        id={`orderItems[${index}][priceInCents]`}
-                        name={`orderItems[${index}][priceInCents]`}
-                        value={item.priceInCents}
-                        onChange={(e) =>
-                          handleOrderItemChange(
-                            index,
-                            "priceInCents",
-                            Number(e.target.value)
-                          )
-                        }
-                        required
-                        disabled={item.type === "delivery"} // Prevent editing delivery fee
-                      />
-                    </div>
+                    {/* Product Selection (only if type is 'product') */}
+                    {item.type === "product" && (
+                      <div className="space-y-2">
+                        <Label htmlFor={`orderItems[${index}][productId]`}>
+                          Product
+                        </Label>
+                        <Select
+                          name={`orderItems[${index}][productId]`}
+                          value={item.productId || ""}
+                          onValueChange={(value) =>
+                            handleOrderItemChange(index, "productId", value)
+                          }
+                          required={item.type === "product"}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select product..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
+                    {/* Variant Selection (only if type is 'product') */}
+                    {item.type === "product" && item.productId && (
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor={`orderItems[${index}][ProductVariantId]`}
+                        >
+                          Variant
+                        </Label>
+                        <Select
+                          name={`orderItems[${index}][ProductVariantId]`}
+                          value={item.ProductVariantId || ""}
+                          onValueChange={(value) =>
+                            handleOrderItemChange(
+                              index,
+                              "ProductVariantId",
+                              value
+                            )
+                          }
+                          required={item.type === "product"}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select variant..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products
+                              .find((p) => p.id === item.productId)
+                              ?.sizes.map((variant) => (
+                                <SelectItem key={variant.id} value={variant.id}>
+                                  {variant.size}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Quantity */}
                     <div className="space-y-2">
                       <Label htmlFor={`orderItems[${index}][quantity]`}>
                         Quantity
@@ -500,6 +603,31 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
                         }
                         required
                         disabled={item.type === "delivery"} // Typically, delivery fee quantity is 1
+                      />
+                    </div>
+
+                    {/* Unit Price */}
+                    <div className="space-y-2">
+                      <Label htmlFor={`orderItems[${index}][priceInCents]`}>
+                        Price (in cents)
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        id={`orderItems[${index}][priceInCents]`}
+                        name={`orderItems[${index}][priceInCents]`}
+                        value={item.priceInCents}
+                        onChange={(e) =>
+                          handleOrderItemChange(
+                            index,
+                            "priceInCents",
+                            Number(e.target.value)
+                          )
+                        }
+                        required
+                        disabled={
+                          item.type === "delivery" || item.type === "product"
+                        } // Disable for delivery and auto-set for products
                       />
                     </div>
                   </div>
@@ -526,7 +654,7 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
             </div>
           </div>
           {/* Customer Selection */}
-          <div className="flex-col w-full md:w-1/4">
+          <div className="flex-col w-full md:w-1/4 gamja2">
             <div className="flex-col p-5 md:p-0 space-y-2 mt-2">
               <div className="space-y-2">
                 <div className=" flex justify-between">
@@ -624,6 +752,24 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
           {/* Delivery Address */}
           <div className="flex-col w-full md:w-1/4 md:p-0 p-4 space-y-2">
             <div className="space-y-2">
+              <Label htmlFor="paymentMethod">Payment Method</Label>
+              <Select
+                name="paymentMethod"
+                required
+                value={paymentMethod}
+                onValueChange={setPaymentMethod}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select payment method..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="helcim">Helcim</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="isDelivery">Delivery Option</Label>
               <Select
                 name="isDelivery"
@@ -649,7 +795,7 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
                 name="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="h-[200px]"
+                className="h-[120px]"
                 placeholder={`E.g.: \n\nThey will pay when they pick up\n - Don't forget message card \n\nmessage:\nHappy Birthday Tom!`}
               />
             </div>
@@ -799,6 +945,11 @@ export default function QuickOrder({ order, users }: OrderFormProps) {
         {/* Submit Button */}
         <SubmitButton />
       </form>
+            <ChangeCalculatorModal
+        isOpen={isChangeCalculatorOpen}
+        onClose={() => setIsChangeCalculatorOpen(false)}
+        total={totalPriceInCents / 100}
+      />
 
       {/* User Creation Modal */}
       <Dialog open={isUserModalOpen} onOpenChange={setIsUserModalOpen}>

@@ -22,15 +22,12 @@ const UserPage = async () => {
     );
   }
 
-  // Fetch user orders from the database
-  const userEmail = session.user.email;
+  const userId = session.user.id;
+  console.log("User ID:", userId); // Debugging
 
   try {
-    const orders: (Order & {
-      orderItems: OrderItem[];
-      deliveryDetails?: DeliveryDetails | null;
-    })[] = await db.order.findMany({
-      where: { guestEmail: userEmail },
+    const orders = await db.order.findMany({
+      where: { userId: userId },
       include: {
         orderItems: true,
         deliveryDetails: true,

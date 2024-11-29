@@ -203,17 +203,28 @@ const OrderConfirmationPage = () => {
                   {orderDetails.deliveryFeeInCents && (
                     <div>
                       <strong>Delivery Fee:</strong>{" "}
-                      {formatCurrency(orderDetails.deliveryFeeInCents/100)}
+                      {formatCurrency(orderDetails.deliveryFeeInCents / 100)}
                     </div>
                   )}
-
                 </div>
               )}
             </>
           )}
 
           {/* Order Total */}
-          <div className="mt-6 flex justify-end">
+          <div className="mt-6 flex flex-col justify-end">
+            <div className="text-right">
+              <p className="text-lg">
+                <strong>Subtotal:</strong>{" "}
+                {formatCurrency(orderDetails.pricePaidInCents/1.13 / 100)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg">
+                <strong>13% HST:</strong>{" "}
+                {formatCurrency(((orderDetails.pricePaidInCents/1.13)*0.13 / 100) )}
+              </p>
+            </div>
             <div className="text-right">
               <p className="text-lg">
                 <strong>Total Amount:</strong>{" "}

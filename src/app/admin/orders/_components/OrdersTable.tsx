@@ -69,7 +69,7 @@ import {
 } from "@prisma/client";
 
 import dayjs from "dayjs"; // Import Day.js
-import { FaStore } from "react-icons/fa"; // Imported but not used; consider removing if unnecessary
+import { FaGlobe, FaStore } from "react-icons/fa"; // Imported but not used; consider removing if unnecessary
 
 interface AdminOrder extends PrismaOrder {
   user: User | null;
@@ -133,8 +133,17 @@ const getDeliveryIcon = (isDelivery: boolean) => {
   ) : (
     <ShoppingBag className="h-6 w-6 text-gray-700" />
   );
-};
 
+
+};
+const getCategoryIcon = (category: string) => {
+  switch (category) {
+    case "online":
+      return <FaGlobe className="h-6 w-6 text-blue-500" />;
+    default:
+      return null;
+  }
+};
 export const columns: ColumnDef<OrderData>[] = [
   {
     accessorKey: "createdAt",
@@ -253,13 +262,13 @@ export const columns: ColumnDef<OrderData>[] = [
       </Button>
     ),
     cell: ({ row }) => {
-      const { status, isDelivery } = row.original;
+      const { status, isDelivery, originalOrder } = row.original;
+      const categoryIcon = getCategoryIcon(originalOrder.category || "");
       return (
         <div className="flex items-center space-x-2">
+          {categoryIcon}
           {getDeliveryIcon(isDelivery)}
-          <div className={getStatusStyles(status)}>
-            {status}
-          </div>
+          <div className={getStatusStyles(status)}>{status}</div>
         </div>
       );
     },
@@ -386,6 +395,9 @@ export const columns: ColumnDef<OrderData>[] = [
 
             {/* General Actions */}
             <DropdownMenuGroup>
+            <DropdownMenuItem asChild>
+                <Link href={`/admin/orders/${orderId}`}>View</Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href={`/admin/orders/${orderId}/edit`}>Edit</Link>
               </DropdownMenuItem>
@@ -420,7 +432,7 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
     return orders.map((order) => ({
       id: order.id,
       createdAt: formatDate(order.createdAt).toString(),
-      customer: order.user?.name || "Walk In",
+      customer: order.user?.name||order.guestName || "Walk In",
       items: order.orderItems
         .map(
           (item) =>
@@ -439,12 +451,22 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
       isDelivery: order.isDelivery ?? false,
       originalOrder: order,
       deliverySchedule:
-        order.deliveryDate && order.deliveryTime
-          ? `${dayjs(order.deliveryDate)
-              .hour(parseInt(order.deliveryTime.split(":")[0]))
-              .minute(parseInt(order.deliveryTime.split(":")[1]))
-              .format("ddd, MMM D, h:mm A")}` // e.g., "Nov 18 2:51 PM"
-          : "N/A",
+      order.deliveryDate && order.deliveryTime
+        ? order.deliveryTime.includes("-")
+          ? `${dayjs(order.deliveryDate).format("ddd, MMM D")}, ${order.deliveryTime}`
+          : dayjs(order.deliveryDate)
+              .set(
+                "hour",
+                parseInt(order.deliveryTime.split(":")[0].trim(), 10)
+              )
+              .set(
+                "minute",
+                order.deliveryTime.includes(":")
+                  ? parseInt(order.deliveryTime.split(":")[1].trim(), 10)
+                  : 0
+              )
+              .format("ddd, MMM D, h:mm A")
+        : "N/A",
       deliveryAddress: order.deliveryDetails?.deliveryAddress || null,
       notes: order.notes || "", // Mapping the notes field
       orderItems: order.orderItems.map((item) => ({
@@ -484,6 +506,7 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
     enableGlobalFilter: true,
     columnResizeMode: "onChange",
   });
+
 
   return (
     <div className="w-full">

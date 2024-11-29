@@ -1,4 +1,5 @@
 // src/_components/ProductDialog.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -10,11 +11,11 @@ import { ProductCard } from "@/components/ProductCard";
 import { ProductDialogContent } from "./ProductDialogContent";
 
 // Import the types
-import { ProductType, ImageType } from "@/types/types";
+import { Product, Image, ProductVariant } from "@prisma/client";
 
 interface ProductDialogProps {
-  product: ProductType;
-  images: ImageType[];
+  product: Product & { sizes: ProductVariant[] }; // Ensure sizes are included
+  images: Image[];
 }
 
 export function ProductDialog({ product, images }: ProductDialogProps) {
@@ -26,16 +27,24 @@ export function ProductDialog({ product, images }: ProductDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger>
-        <ProductCard {...product} />
+      <DialogTrigger asChild>
+        <button>
+          <ProductCard
+            id={product.id}
+            name={product.name}
+            description={product.description}
+            imagePath={product.imagePath}
+            sizes={product.sizes}
+          />
+        </button>
       </DialogTrigger>
 
-        <ProductDialogContent
-          product={product}
-          images={images}
-          onClose={handleClose}
-        />
- 
+      <ProductDialogContent
+        product={product}
+        images={images}
+        variants={product.sizes}
+        onClose={handleClose}
+      />
     </Dialog>
   );
 }

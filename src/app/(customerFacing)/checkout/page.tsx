@@ -40,6 +40,7 @@ declare global {
 // Enhanced Zod schema with conditional requirements
 const schema = z.object({
   isGuest: z.boolean(),
+  userId: z.string().optional(),
   guestEmail: z.string().email().optional().or(z.literal("")).or(z.null()),
   guestName: z.string().optional().or(z.literal("")).or(z.null()),
   guestPhone: z
@@ -77,6 +78,7 @@ const CheckoutPage = () => {
   const [formData, setFormData] = useState<FormData>({
     isGuest: true,
     guestEmail: "",
+    userId: "",
     guestPhone: "",
     deliveryOption: "pickup",
     recipientName: "",
@@ -254,6 +256,7 @@ const CheckoutPage = () => {
           cartItems: cart.items.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
+            size: item.size,
             priceInCents: item.priceInCents,
             name: item.name,
             type: "product", // Set 'type' as 'product' or determine based on your logic
@@ -275,6 +278,7 @@ const CheckoutPage = () => {
           secretToken,
           isGuest: formData.isGuest,
           guestEmail: formData.isGuest ? formData.guestEmail : "",
+          guestName: formData.isGuest ? formData.guestName : "",
           guestPhone: formData.isGuest ? formData.guestPhone : "",
         }),
       });
@@ -430,8 +434,8 @@ const CheckoutPage = () => {
         isGuest: false,
         guestEmail: session.user.email || "",
         guestPhone: session.user.phone || "",
-        recipientName: session.user.name || "",
-        recipientPhone: session.user.phone || "",
+        guestName: session.user.name || "",
+        userId: session.user.id || "",
       }));
     }
   }, [status, session]);

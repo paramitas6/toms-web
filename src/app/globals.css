@@ -178,6 +178,25 @@ input[type="number"] {
   background-color: #ccc; /* Example color */
 }
 
+.accordion {
+  display: flex;
+  flex-direction: row; /* Horizontal layout */
+}
+
+.accordion-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.accordion-content {
+  display: none; /* Hidden by default */
+  flex: 1;
+}
+
+.accordion-item.open .accordion-content {
+  display: block; /* Show when open */
+}
+
 
 
 @keyframes fadeIn {

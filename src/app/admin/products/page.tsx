@@ -49,14 +49,18 @@ async function ProductsTable() {
       id: true,
       name: true,
       category: true,
-      priceInCents: true,
       isAvailableForPurchase: true,
       featuredProducts: {
         select: { id: true },
       },
       _count: {
         select: {
-          orderItems: true, // Count of OrderItems linked to Product
+          orderItems: true,
+        },
+      },
+      sizes: {
+        select: {
+          priceInCents: true,
         },
       },
     },
@@ -77,7 +81,7 @@ async function ProductsTable() {
             <span className="sr-only">Available For Purchase</span>
           </TableHead>
           <TableHead>Name</TableHead>
-          <TableHead>Price</TableHead>
+          <TableHead>Price Range</TableHead>
           <TableHead>Category</TableHead>
           <TableHead>Featured</TableHead>
           <TableHead>Orders</TableHead>
@@ -89,6 +93,13 @@ async function ProductsTable() {
       <TableBody>
         {products.map((product) => {
           const isFeatured = product.featuredProducts.length > 0;
+          const variantPrices = product.sizes.map((size) => size.priceInCents);
+          const minPrice = Math.min(...variantPrices);
+          const maxPrice = Math.max(...variantPrices);
+          const priceRange =
+            minPrice === maxPrice
+              ? formatCurrency(minPrice / 100)
+              : `${formatCurrency(minPrice / 100)} - ${formatCurrency(maxPrice / 100)}`;
           return (
             <TableRow key={product.id}>
               <TableCell>
@@ -105,7 +116,7 @@ async function ProductsTable() {
                 )}
               </TableCell>
               <TableCell>{product.name}</TableCell>
-              <TableCell>{formatCurrency(product.priceInCents / 100)}</TableCell>
+              <TableCell>{priceRange}</TableCell>
               <TableCell>{product.category}</TableCell>
               <TableCell>
                 {isFeatured ? (
@@ -132,7 +143,6 @@ async function ProductsTable() {
                         Edit
                       </Link>
                     </DropdownMenuItem>
-
                     <ActiveToggleDropdownItem
                       id={product.id}
                       isAvailableForPurchase={product.isAvailableForPurchase}
@@ -144,7 +154,7 @@ async function ProductsTable() {
                     <DropdownMenuSeparator />
                     <DeleteDropdownItem
                       id={product.id}
-                      disabled={product._count.orderItems > 0} // Updated here
+                      disabled={product._count.orderItems > 0}
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>

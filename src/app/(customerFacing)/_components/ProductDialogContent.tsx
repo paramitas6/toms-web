@@ -15,11 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 
 import { useState, useContext } from "react";
-import CartContext from "../_components/CartComponent";
+import CartContext from "../_components/CartComponent"; // Adjust the path as necessary
 import { ToastAction } from "@/components/ui/toast";
 
-import { useToast } from "@/hooks/use-toast";
-import { ProductType, ImageType } from "@/types/types";
+import { useToast } from "@/hooks/use-toast"; // Adjust the path as necessary
+import { Product as ProductType, Image as ImageType, ProductVariant as ProductVariantType } from "@prisma/client";
 
 import {
   Carousel,
@@ -30,11 +30,11 @@ import {
 } from "@/components/ui/carousel";
 
 import { v4 as uuidv4 } from "uuid";
-import { AutosizeTextarea } from "@/components/ui/autosize-textarea";
 
 interface ProductDialogContentProps {
   product: ProductType;
   images: ImageType[];
+  variants: ProductVariantType[];
   onClose: () => void;
 }
 
@@ -44,14 +44,24 @@ const MAX_CARD_MESSAGE_LENGTH = 100;
 export function ProductDialogContent({
   product,
   images,
+  variants,
   onClose,
 }: ProductDialogContentProps) {
-  const [mainImage, setMainImage] = useState(product.imagePath);
+  const [mainImage, setMainImage] = useState<string>(product.imagePath);
   const { addItemToCart } = useContext(CartContext);
   const toast = useToast();
-  const [cardMessage, setCardMessage] = useState("");
+  const [cardMessage, setCardMessage] = useState<string>("");
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(
+    variants.length > 0 ? variants[0].id : ""
+  );
+
+  const selectedVariant = variants.find(
+    (variant) => variant.id === selectedVariantId
+  );
 
   const handleAddToCart = () => {
+    if (!selectedVariant) return;
+
     // Ensure the cardMessage does not exceed the maximum length
     const trimmedMessage = cardMessage.slice(0, MAX_CARD_MESSAGE_LENGTH);
 
@@ -59,8 +69,10 @@ export function ProductDialogContent({
     const cartItem = {
       id: uuidv4(), // Generate unique ID
       productId: product.id,
+      variantId: selectedVariant.id,
       name: product.name,
-      priceInCents: product.priceInCents,
+      size: selectedVariant.size,
+      priceInCents: selectedVariant.priceInCents,
       image: mainImage,
       quantity: 1,
       cardMessage: trimmedMessage,
@@ -75,8 +87,8 @@ export function ProductDialogContent({
       variant: "success",
       action: (
         <ToastAction altText="Go to basket" className="border-none">
-          <Link  href="/cart">
-            <ShoppingBag className="" />
+          <Link href="/cart">
+            <ShoppingBag/>
           </Link>
         </ToastAction>
       ),
@@ -99,12 +111,13 @@ export function ProductDialogContent({
   return (
     <DialogContent className="sm:max-w-[80%] h-full font-montserrat overflow-auto">
       <div className="grid grid-cols-1 sm:grid-cols-2 pt-5">
+        {/* Left Side - Images */}
         <div className="flex flex-col items-center md:pr-4">
           <div className="w-full h-auto sm:w-full aspect-square group relative flex-shrink">
             <Image
               className="object-cover sm:object-center w-full"
               src={mainImage}
-              fill
+              layout="fill"
               alt={product.name}
               onClick={() => {
                 window.open(mainImage, "_blank");
@@ -125,7 +138,7 @@ export function ProductDialogContent({
                   <Image
                     src={product.imagePath}
                     className="object-contain"
-                    fill
+                    layout="fill"
                     alt={product.name}
                     sizes="75px"
                     onClick={() => setMainImage(product.imagePath)}
@@ -133,13 +146,13 @@ export function ProductDialogContent({
                 </CarouselItem>
                 {images.map((image: ImageType, index: number) => (
                   <CarouselItem
-                    key={index}
+                    key={image.id || index} // Preferably use a unique identifier
                     className="flex-shrink-0 w-32 h-32 relative cursor-pointer basis-1/3 md:basis-1/3 lg:basis-1/5 pl-2"
                   >
                     <Image
                       src={image.imagePath}
                       className="object-contain"
-                      fill
+                      layout="fill"
                       alt={`${product.name} - ${index + 1}`}
                       sizes="75px"
                       onClick={() => setMainImage(image.imagePath)}
@@ -157,13 +170,16 @@ export function ProductDialogContent({
           </div>
         </div>
 
+        {/* Right Side - Product Details */}
         <div className="p-2 space-y-2 flex flex-col pl-4">
           <div className="flex flex-col justify-between items-left mt-4 p-1 font-montserrat">
             <DialogTitle className="text-center sm:text-right text-4xl text-gray-800">
               {product.name}
             </DialogTitle>
             <DialogDescription className="text-center sm:text-right">
-              {formatCurrency(product.priceInCents / 100)}
+              {selectedVariant
+                ? formatCurrency(selectedVariant.priceInCents / 100)
+                : formatCurrency((product.priceInCents || 0) / 100)}
             </DialogDescription>
           </div>
 
@@ -176,6 +192,22 @@ export function ProductDialogContent({
           <div className="m-4 flex-shrink py-2">
             <h1 className="font text-xl">How to care</h1>
             <p>{product.careguide}</p>
+          </div>
+
+          <div className="m-4 flex-shrink py-2">
+            <h1 className="font text-xl pb-2">Select Size</h1>
+            <select
+              value={selectedVariantId}
+              onChange={(e) => setSelectedVariantId(e.target.value)}
+              className="w-full p-2 border rounded"
+              required
+            >
+              {variants.map((variant) => (
+                <option key={variant.id} value={variant.id}>
+                  {variant.size} - {formatCurrency(variant.priceInCents / 100)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="m-4 flex-shrink py-2">
@@ -197,7 +229,7 @@ export function ProductDialogContent({
               className="p-2 w-full rounded-none flex items-center justify-center bg-gray-800"
               type="button"
               onClick={handleAddToCart}
-              disabled={cardMessage.length > MAX_CARD_MESSAGE_LENGTH}
+              disabled={!selectedVariant || cardMessage.length > MAX_CARD_MESSAGE_LENGTH}
             >
               <ShoppingCartIcon className="mr-2" />
               Add to cart
